@@ -16,7 +16,9 @@ if (!key) {
     saved.unshift({ code, key, name: code, at: Date.now() });
     store('quizy:events', saved.slice(0, 50));
   }
-  if (!hashKey) history.replaceState(null, '', `#key=${key}`);
+  // Keep the secret out of the address bar: organizers often project or share their screen.
+  // The key stays in this browser's storage and in the masked link under „Linkuri”.
+  if (hashKey) history.replaceState(null, '', location.pathname);
 }
 
 function showError(msg) {
@@ -80,9 +82,13 @@ function renderLinks() {
     ['Ecran de proiecție', `${base}/present/${code}`],
     ['Administrare (secret!)', `${base}/admin/${code}#key=${key}`],
   ];
-  $('#links').replaceChildren(...rows.map(([label, url]) => h('div', {},
-    h('div', { class: 'small muted' }, label),
-    h('div', { class: 'link' }, h('code', {}, url), h('button', { class: 'sm', type: 'button', onclick: () => copy(url) }, 'Copiază')))));
+  $('#links').replaceChildren(...rows.map(([label, url]) => {
+    const secret = url.includes('#key=');
+    const shown = secret ? url.replace(/#key=.*/, '#key=••••••••') : url;
+    return h('div', {},
+      h('div', { class: 'small muted' }, label),
+      h('div', { class: 'link' }, h('code', {}, shown), h('button', { class: 'sm', type: 'button', onclick: () => copy(url) }, 'Copiază')));
+  }), h('p', { class: 'small muted', style: { margin: 0 } }, 'Cine are linkul de administrare controlează evenimentul. Nu-l proiecta și nu-l trimite participanților.'));
 }
 
 function statusBadge(p) {

@@ -106,6 +106,7 @@ EOF
 cat > /etc/caddy/Caddyfile <<EOF
 $DOMAIN {
 	encode gzip
+	header Strict-Transport-Security "max-age=31536000"
 	reverse_proxy 127.0.0.1:$PORT
 }
 EOF

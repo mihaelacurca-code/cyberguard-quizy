@@ -17,14 +17,20 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   const http = createServer(app);
   const io = new Server(http, { serveClient: true, maxHttpBufferSize: 64 * 1024 });
 
-  if (trustProxy) app.set('trust proxy', true);
+  // Trust exactly one proxy hop (Caddy, Nginx, Render). `true` would believe a client-supplied
+  // X-Forwarded-For and let anyone pick their own IP to dodge the rate limits.
+  if (trustProxy) app.set('trust proxy', 1);
   app.disable('x-powered-by');
   app.use(express.json({ limit: '32kb' }));
   app.use((req, res, next) => {
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Referrer-Policy', 'no-referrer');
+    // Older Safari does not count same-origin ws:// as 'self', so name this host explicitly.
+    const host = /^[a-z0-9.-]+(:\d+)?$/i.test(req.get('host') || '') ? req.get('host') : '';
+    const ws = host ? ` wss://${host} ws://${host}` : '';
     res.set('Content-Security-Policy',
-      "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self' ws: wss:; frame-ancestors 'self'");
+      `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'${ws}; frame-ancestors 'self'; base-uri 'none'; form-action 'self'; object-src 'none'`);
+    res.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     next();
   });
 
@@ -37,34 +43,45 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
 
   app.get('/healthz', (req, res) => res.json({ ok: true }));
 
-  // Event creation is the only anonymous write over HTTP; keep it from being scripted into the ground.
-  const created = new Map();
+  // Per-IP limits. They are generous on purpose: a whole conference can sit behind one venue NAT.
+  const limits = {
+    create: rateLimiter(30, 3_600_000), // new events per hour
+    miss: rateLimiter(60, 600_000), // wrong event codes / admin keys per 10 min (stops code guessing)
+    join: rateLimiter(1500, 600_000), // audience joins per 10 min (slows scripted fake participants)
+    ask: rateLimiter(120, 60_000), // Q&A questions per minute
+  };
+  const sweeper = setInterval(() => Object.values(limits).forEach((l) => l.sweep()), 60_000);
+  sweeper.unref();
+
   app.post('/api/events', (req, res) => {
-    const ip = req.ip || 'unknown';
-    const hour = Date.now() - 3_600_000;
-    const recent = (created.get(ip) || []).filter((t) => t > hour);
-    if (recent.length >= 30) return res.status(429).json({ error: 'Prea multe evenimente create într-o oră.' });
+    if (!limits.create.take(req.ip)) return res.status(429).json({ error: 'Prea multe evenimente create într-o oră.' });
     try {
-      const out = store.createEvent(req.body?.name);
-      recent.push(Date.now());
-      created.set(ip, recent);
-      res.status(201).json(out);
+      res.status(201).json(store.createEvent(req.body?.name));
     } catch (e) {
       sendError(res, e);
     }
   });
 
   app.get('/api/events/:code', (req, res) => {
+    if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe coduri greșite. Încearcă peste câteva minute.' });
     const ev = store.getEvent(req.params.code);
-    if (!ev) return res.status(404).json({ error: 'Nu există niciun eveniment cu acest cod.' });
+    if (!ev) {
+      limits.miss.take(req.ip);
+      return res.status(404).json({ error: 'Nu există niciun eveniment cu acest cod.' });
+    }
     res.json({ code: ev.code, name: ev.name });
   });
 
   app.get('/api/events/:code/export.csv', (req, res) => {
+    if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări.' });
     const ev = store.verifyAdmin(req.params.code, req.get('x-admin-key'));
-    if (!ev) return res.status(403).json({ error: 'Acces interzis.' });
+    if (!ev) {
+      limits.miss.take(req.ip);
+      return res.status(403).json({ error: 'Acces interzis.' });
+    }
     const csv = store.exportRows(ev).map((r) => r.map(csvCell).join(',')).join('\r\n');
     res.set('Content-Type', 'text/csv; charset=utf-8');
+    res.set('Cache-Control', 'no-store');
     res.set('Content-Disposition', `attachment; filename="quizy-${ev.code}.csv"`);
     res.send('﻿' + csv);
   });
@@ -74,7 +91,8 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     if (!ev) return res.status(404).end();
     const base = publicUrl || `${req.protocol}://${req.get('host')}`;
     const svg = await QRCode.toString(`${base}/e/${ev.code}`, { type: 'svg', margin: 1, errorCorrectionLevel: 'M' });
-    res.set('Content-Type', 'image/svg+xml').set('Cache-Control', 'public, max-age=86400').send(svg);
+    // Without PUBLIC_URL the link comes from the Host header, so a shared cache must not keep it.
+    res.set('Content-Type', 'image/svg+xml').set('Cache-Control', publicUrl ? 'public, max-age=86400' : 'private, max-age=300').send(svg);
   });
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'Nu există.' }));
@@ -129,7 +147,17 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     'question:moderate': (ev, p) => store.moderate(ev, p.id, p.op),
   };
 
+  // Same rule as Express: with one trusted proxy, the client is the last X-Forwarded-For entry.
+  const socketIp = (socket) => {
+    if (trustProxy) {
+      const fwd = String(socket.handshake.headers['x-forwarded-for'] || '').split(',').map((x) => x.trim()).filter(Boolean);
+      if (fwd.length) return fwd[fwd.length - 1];
+    }
+    return socket.handshake.address || 'unknown';
+  };
+
   io.on('connection', (socket) => {
+    const ip = socketIp(socket);
     let tokens = 40;
     let last = Date.now();
     const allow = () => {
@@ -160,14 +188,14 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
 
     on('join', ({ code, role = 'audience', participantId, key }) => {
       if (me().code) throw new UserError('Deja conectat.');
-      let ev;
-      if (role === 'admin') {
-        ev = store.verifyAdmin(code, key);
-        if (!ev) throw new UserError('Cheie de administrare invalidă.');
-      } else {
-        ev = store.requireEvent(code);
-      }
       if (!['admin', 'present', 'audience'].includes(role)) throw new UserError('Rol necunoscut.');
+      if (limits.miss.blocked(ip)) throw new UserError('Prea multe încercări greșite. Încearcă peste câteva minute.');
+      const ev = role === 'admin' ? store.verifyAdmin(code, key) : store.getEvent(code);
+      if (!ev) {
+        limits.miss.take(ip);
+        throw new UserError(role === 'admin' ? 'Cheie de administrare invalidă.' : 'Evenimentul nu există.');
+      }
+      if (role === 'audience' && !limits.join.take(ip)) throw new UserError('Prea multe conectări din această rețea. Încearcă puțin mai târziu.');
       const out = { state: stateFor(role, ev) };
       if (role === 'audience') out.me = store.personalState(ev.code, participantId);
       socket.data = { code: ev.code, role, participantId: role === 'audience' ? participantId : null };
@@ -185,6 +213,7 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
 
     on('ask', ({ text, name }) => {
       const { code, participantId } = requireAudience();
+      if (!limits.ask.take(ip)) throw new UserError('Prea multe întrebări din această rețea. Încearcă peste un minut.');
       const out = store.ask(code, participantId, name, text);
       changed(code);
       return out;
@@ -220,12 +249,34 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     app, http, io, store,
     close: () => new Promise((resolve) => {
       closing = true;
+      clearInterval(sweeper);
       for (const t of pending.values()) clearTimeout(t);
       io.close(() => {
         db.close();
         resolve();
       });
     }),
+  };
+}
+
+function rateLimiter(max, windowMs) {
+  const hits = new Map();
+  const recent = (key) => (hits.get(key) || []).filter((t) => t > Date.now() - windowMs);
+  return {
+    blocked: (key) => recent(key).length >= max,
+    take(key) {
+      const list = recent(key);
+      if (list.length >= max) return false;
+      list.push(Date.now());
+      hits.set(key, list);
+      return true;
+    },
+    sweep() {
+      for (const key of hits.keys()) {
+        const list = recent(key);
+        if (list.length) hits.set(key, list); else hits.delete(key);
+      }
+    },
   };
 }
 

@@ -118,9 +118,11 @@ Aplicația nu impune nicio limită; capacitatea depinde de server. Actualizăril
 
 ## Securitate și limite asumate
 
+Auditul complet, problemele corectate și riscurile rămase sunt în [`SECURITY.md`](SECURITY.md).
+
 - Linkul de administrare conține o cheie secretă aleatorie; serverul păstrează doar hash-ul ei. Cine are linkul controlează evenimentul.
 - Participanții sunt anonimi și identificați printr-un ID aleator ținut în browser. Ca la orice sondaj fără cont, cineva care își golește browserul poate vota din nou.
-- Protecții anti-abuz, nu limite de utilizare: lungimea textelor, cel mult 5 întrebări Q&A pe minut per participant, limitarea ritmului acțiunilor per conexiune, cel mult 30 de evenimente noi pe oră per IP.
+- Protecții anti-abuz, nu limite de utilizare: lungimea textelor, cel mult 5 întrebări Q&A pe minut per participant, limitarea ritmului acțiunilor per conexiune, limite generoase per IP (evenimente noi, conectări, întrebări) și blocare temporară după 60 de coduri sau chei greșite în 10 minute.
 - Exportul CSV neutralizează valorile care ar putea fi interpretate drept formule în Excel.
 
 ## Structură

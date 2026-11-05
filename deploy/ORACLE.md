@@ -66,10 +66,10 @@ curl -fsSL https://raw.githubusercontent.com/mihaelacurca-code/Quizy/main/deploy
 
 1. GitHub → **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
 2. **Repository access**: *Only select repositories* → `Quizy`. **Permissions → Contents**: *Read-only*. Expirarea poate fi scurtă (7 zile).
-3. Copiază tokenul și rulează pe server, înlocuind `TOKENUL_TAU`:
+3. Copiază tokenul și rulează pe server comanda de mai jos. Lipește tokenul când ți-l cere (nu se vede pe ecran și nu rămâne în istoricul comenzilor), apoi Enter:
 
 ```bash
-export GITHUB_TOKEN=TOKENUL_TAU
+read -rsp "Token GitHub: " GITHUB_TOKEN; echo
 ```
 
 ```bash

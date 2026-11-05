@@ -449,6 +449,7 @@ export function createStore(db) {
 
   function toggleUpvote(code, participantId, questionId) {
     const ev = requireEvent(code);
+    if (ev.settings.closed) throw new UserError('Evenimentul este închis.');
     const pid = participant(participantId);
     const qu = st.question.get(Number(questionId), ev.id);
     if (!qu || qu.status !== 'visible') throw new UserError('Întrebarea nu mai este disponibilă.');
@@ -513,6 +514,14 @@ export function createStore(db) {
     };
   }
 
+  // Anyone with the event code can open the projector page, so an unrevealed quiz must not
+  // tell them which answer the room is choosing.
+  function presenterPoll(p) {
+    const out = publicPoll(p, { withResults: true });
+    if (p.type === 'quiz' && !p.revealed) out.results = { voters: out.results.voters, responses: out.results.responses };
+    return out;
+  }
+
   function presenterState(ev) {
     const live = hydratePoll(st.livePoll.get(ev.id));
     // The projected screen keeps showing the last poll after it closes.
@@ -524,7 +533,7 @@ export function createStore(db) {
     const visible = sortQuestions(questions(ev).filter((x) => x.status === 'visible')).slice(0, 30);
     return {
       event: { code: ev.code, name: ev.name, settings: ev.settings },
-      poll: shown ? publicPoll(shown, { withResults: true }) : null,
+      poll: shown ? presenterPoll(shown) : null,
       questions: visible,
       leaderboard: leaderboard(ev, 10).map(({ id, ...r }) => r),
     };
