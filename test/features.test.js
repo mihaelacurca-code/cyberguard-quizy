@@ -209,3 +209,40 @@ test('changing the code moves connected participants', async () => {
     await server.close();
   }
 });
+
+// ---------- post-event report ----------
+
+test('report: admin key or panel session only, with stats, polls, test and certificates', async () => {
+  const server = createApp({ adminPassword: 'parola-raport-1234' });
+  await new Promise((r) => server.http.listen(0, r));
+  const base = `http://localhost:${server.http.address().port}`;
+  try {
+    const { store } = server;
+    const { code, adminKey } = store.createEvent('Raport');
+    const ev = () => store.getEvent(code);
+    const poll = store.createPoll(ev(), { type: 'choice', question: 'Culoare?', options: ['A', 'B'] });
+    store.createPoll(ev(), { type: 'rating', question: 'Neînceput' });
+    store.setPollStatus(ev(), poll, 'live');
+    store.vote(code, poll, A, 'Ana', [0]);
+    store.vote(code, poll, B, 'Bogdan', [1]);
+    store.ask(code, C, 'Cezar', 'O întrebare?');
+    const [t1] = store.createPolls(ev(), [{ question: 'T', options: ['x', 'y'], correct: [0] }], 'test');
+    store.updateEvent(ev(), { settings: { testRound: 'post', certEnabled: true } });
+    store.vote(code, t1, A, 'Ana', [0]);
+    store.issueCertificate(code, A, 'Ana Popescu');
+
+    assert.equal((await fetch(`${base}/api/events/${code}/report`)).status, 403);
+    const res = await fetch(`${base}/api/events/${code}/report`, { headers: { 'X-Admin-Key': adminKey } });
+    assert.equal(res.status, 200);
+    const d = await res.json();
+    assert.equal(d.event.name, 'Raport');
+    assert.deepEqual(d.stats, { participants: 3, polls: 1, responses: 2, questions: 1, upvotes: 0, certificates: 1 });
+    assert.equal(d.polls.length, 1, 'polls never started stay out of the report');
+    assert.deepEqual(d.polls[0].results.counts, [1, 1]);
+    assert.equal(d.test.total, 1);
+    assert.equal(d.certificates[0].name, 'Ana Popescu');
+    assert.equal((await fetch(`${base}/report/${code}`)).status, 200);
+  } finally {
+    await server.close();
+  }
+});

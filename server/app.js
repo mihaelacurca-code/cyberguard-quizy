@@ -71,6 +71,7 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   app.get('/', page('index.html'));
   app.get('/panel', page('panel.html'));
   app.get('/v/:id', page('verify.html'));
+  app.get('/report/:code', page('report.html'));
   app.get('/e/:code', page('event.html'));
   app.get('/admin/:code', page('admin.html'));
   app.get('/present/:code', page('present.html'));
@@ -109,6 +110,17 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
       return res.status(404).json({ error: 'Nu există niciun eveniment cu acest cod.' });
     }
     res.json({ code: ev.code, name: ev.name });
+  });
+
+  app.get('/api/events/:code/report', (req, res) => {
+    if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări.' });
+    const ev = store.verifyAdmin(req.params.code, req.get('x-admin-key')) || (panelAuthed(req) ? store.getEvent(req.params.code) : null);
+    if (!ev) {
+      limits.miss.take(req.ip);
+      return res.status(403).json({ error: 'Acces interzis.' });
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json(store.reportData(ev));
   });
 
   app.get('/api/events/:code/export.csv', (req, res) => {

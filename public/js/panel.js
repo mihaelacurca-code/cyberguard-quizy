@@ -90,6 +90,7 @@ async function load() {
       h('td', {}, h('div', { class: 'row', style: { flexWrap: 'nowrap' } },
         h('a', { class: 'btn sm primary', href: `/admin/${ev.code}` }, t('Administrează')),
         h('a', { class: 'btn sm', href: `/present/${ev.code}`, target: '_blank', rel: 'noopener' }, t('Ecran')),
+        h('a', { class: 'btn sm', href: `/report/${ev.code}`, target: '_blank', rel: 'noopener' }, t('Raport')),
         h('button', { class: 'sm', type: 'button', onclick: () => newKey(ev) }, t('Link nou de administrare')),
         h('button', { class: 'sm ghost danger', type: 'button', onclick: () => remove(ev) }, t('Șterge'))))))))));
 }

@@ -49,7 +49,7 @@ test('every interface text has an English version', async () => {
       if (!ignore.has(s) && t(s) === s) missing.add(`${f}: ${s}`);
     }
   }
-  for (const f of ['index.html', 'event.html', 'admin.html', 'present.html', 'panel.html', 'verify.html']) {
+  for (const f of ['index.html', 'event.html', 'admin.html', 'present.html', 'panel.html', 'verify.html', 'report.html']) {
     const html = read(`public/${f}`);
     for (const m of html.matchAll(/<(\w+)[^>]*\sdata-i18n(?:\s[^>]*)?>([^<]*)</g)) {
       const s = m[2].trim().replace(/&amp;/g, '&');

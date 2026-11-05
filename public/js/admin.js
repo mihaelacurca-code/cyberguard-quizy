@@ -56,6 +56,7 @@ function render() {
   $('#event-title').textContent = `${ev.name} · ${ev.code}`;
   $('#online').textContent = tr('● {n} online', { n: votersLabel(state.online) });
   $('#present-link').href = `/present/${ev.code}`;
+  $('#report-link').href = `/report/${ev.code}`;
   if (document.activeElement !== $('#rename-input')) $('#rename-input').value = ev.name;
   $('#qa-enabled').checked = ev.settings.qaEnabled;
   $('#qa-moderation').checked = ev.settings.qaModeration;

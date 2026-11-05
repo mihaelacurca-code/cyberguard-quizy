@@ -136,6 +136,12 @@ export function createStore(db) {
     cert: q('SELECT c.*, e.name AS event_name, e.settings AS event_settings FROM certificates c JOIN events e ON e.id = c.event_id WHERE c.id = ?'),
     insertCert: q('INSERT INTO certificates (id, event_id, participant_id, name, score, issued_at) VALUES (?, ?, ?, ?, ?, ?)'),
     certCount: q('SELECT COUNT(*) AS n FROM certificates WHERE event_id = ?'),
+    certsOfEvent: q('SELECT id, name, score, issued_at FROM certificates WHERE event_id = ? ORDER BY name COLLATE NOCASE'),
+    participantsOf: q(`SELECT COUNT(DISTINCT participant_id) AS n FROM (
+                         SELECT v.participant_id FROM votes v JOIN polls p ON p.id = v.poll_id WHERE p.event_id = ?
+                         UNION SELECT participant_id FROM questions WHERE event_id = ?)`),
+    responsesOf: q(`SELECT COUNT(*) AS n FROM votes v JOIN polls p ON p.id = v.poll_id WHERE p.event_id = ? AND p.kind = ''`),
+    upvotesOfEvent: q('SELECT COUNT(*) AS n FROM upvotes u JOIN questions qu ON qu.id = u.question_id WHERE qu.event_id = ?'),
 
     getSetting: q('SELECT value FROM app_settings WHERE key = ?'),
     putSetting: q('INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
@@ -798,6 +804,31 @@ export function createStore(db) {
     };
   }
 
+  // Everything the post-event report shows, in one snapshot.
+  function reportData(ev) {
+    const admin = adminState(ev);
+    const ran = admin.polls.filter((p) => p.openedAt || p.results.responses > 0);
+    const qs = admin.questions.filter((x) => x.status !== 'pending');
+    return {
+      event: { ...admin.event, issuer: ev.settings.certIssuer },
+      generatedAt: now(),
+      stats: {
+        participants: st.participantsOf.get(ev.id, ev.id).n,
+        polls: ran.length,
+        responses: st.responsesOf.get(ev.id).n,
+        questions: qs.length,
+        upvotes: st.upvotesOfEvent.get(ev.id).n,
+        certificates: admin.certificates,
+      },
+      polls: ran,
+      questions: qs,
+      leaderboard: admin.leaderboard.slice(0, 10),
+      test: admin.test,
+      testQuestions: admin.testQuestions,
+      certificates: st.certsOfEvent.all(ev.id).map((c) => ({ id: c.id, name: c.name, score: c.score, issuedAt: c.issued_at })),
+    };
+  }
+
   function exportRows(ev, lang = 'ro') {
     const en = lang === 'en';
     const rows = [en
@@ -819,7 +850,7 @@ export function createStore(db) {
 
   return {
     createEvent, getEvent, requireEvent, verifyAdmin, updateEvent, deleteEvent, changeCode, rotateAdminKey, listEvents,
-    appSetting, setAppSetting, testReport, issueCertificate, certificateView, replyToQuestion,
+    appSetting, setAppSetting, testReport, issueCertificate, certificateView, replyToQuestion, reportData,
     createPoll, createPolls, updatePoll, duplicatePoll, deletePoll, movePoll, setPollStatus, setShowResults, revealQuiz, resetPoll,
     vote, results, leaderboard,
     ask, toggleUpvote, moderate,
