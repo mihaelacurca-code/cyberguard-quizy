@@ -201,7 +201,7 @@ input[type=text], textarea, select { background: rgb(2 8 24 / 70%); }
       <div class="stage">
         <div class="main" id="stage"></div>
         <div class="join">
-          <span class="small muted">Intră pe quizy.ro/e/</span>
+          <span class="small muted">Intră pe cyberguardquizy.com/e/</span>
           <span class="code">Q7K2MX</span>
           <canvas id="qr" width="25" height="25" aria-label="Cod QR decorativ pentru demo"></canvas>
           <span class="small muted" id="stage-online"></span>
@@ -589,7 +589,7 @@ Cine răspunde de NIS2 în organizație?
     $('#stage-online').textContent = `${state.online} online`;
     const box = $('#stage');
     if (state.screen === 'join') {
-      return box.replaceChildren(h('div', { class: 'muted' }, 'Training NIS2 pentru IMM-uri'), h('h1', {}, 'Scoate telefonul și intră pe quizy.ro/e/Q7K2MX'), h('p', { class: 'muted', style: { margin: 0 } }, 'Sau scanează codul QR din dreapta.'));
+      return box.replaceChildren(h('div', { class: 'muted' }, 'Training NIS2 pentru IMM-uri'), h('h1', {}, 'Scoate telefonul și intră pe cyberguardquizy.com/e/Q7K2MX'), h('p', { class: 'muted', style: { margin: 0 } }, 'Sau scanează codul QR din dreapta.'));
     }
     if (state.screen === 'qa') {
       const qs = state.questions.filter((q) => q.status === 'visible').sort((a, b) => b.hl - a.hl || b.up.size - a.up.size);

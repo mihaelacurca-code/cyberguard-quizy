@@ -96,7 +96,7 @@ npm test
 |---|---|---|
 | `PORT` | `3000` | Portul HTTP |
 | `DATABASE_FILE` | `data/quizy.db` | Fișierul SQLite |
-| `PUBLIC_URL` | adresa din cerere | Adresa publică folosită în codul QR (ex. `https://quizy.exemplu.ro`) |
+| `PUBLIC_URL` | adresa din cerere | Adresa publică folosită în codul QR (ex. `https://cyberguardquizy.com`) |
 | `HOST` | `0.0.0.0` | Interfața pe care ascultă (`127.0.0.1` în spatele unui reverse proxy) |
 | `TRUST_PROXY` | — | `1` când rulează în spatele unui reverse proxy (Nginx, Render, Fly) |
 

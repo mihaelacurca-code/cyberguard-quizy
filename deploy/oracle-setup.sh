@@ -3,12 +3,12 @@
 # Written for an Oracle Cloud "Always Free" VM, works on any Ubuntu 22.04/24.04 server.
 #
 #   sudo bash oracle-setup.sh                  # address becomes <ip>.sslip.io, with HTTPS
-#   sudo bash oracle-setup.sh quizy.exemplu.ro # your own domain (its DNS must point to this server)
+#   sudo bash oracle-setup.sh cyberguardquizy.com # your own domain (its DNS must point to this server)
 #
 # For a private repository pass a read-only GitHub token: sudo GITHUB_TOKEN=... bash oracle-setup.sh
 set -euo pipefail
 
-REPO="${QUIZY_REPO:-https://github.com/mihaelacurca-code/Quizy.git}"
+REPO="${QUIZY_REPO:-https://github.com/mihaelacurca-code/cyberguard-quizy.git}"
 BRANCH="${QUIZY_BRANCH:-main}"
 APP_DIR=/opt/quizy
 DATA_DIR=/var/lib/quizy
@@ -110,6 +110,15 @@ $DOMAIN {
 	reverse_proxy 127.0.0.1:$PORT
 }
 EOF
+# A bare domain (example.com) also answers on www. and sends visitors to the main address.
+if [[ "$DOMAIN" != *.sslip.io && "$(tr -cd . <<<"$DOMAIN" | wc -c)" -eq 1 ]]; then
+  cat >> /etc/caddy/Caddyfile <<EOF
+
+www.$DOMAIN {
+	redir https://$DOMAIN{uri} permanent
+}
+EOF
+fi
 
 # ---------- firewall ----------
 # Oracle's Ubuntu images reject everything except SSH at the OS level, on top of the cloud security list.

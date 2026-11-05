@@ -56,16 +56,16 @@ La întrebarea *Are you sure you want to continue connecting* scrie `yes`. Acum 
 
 ## 5. Instalează Quizy
 
-**Dacă repo-ul Quizy e public**, rulează pe server:
+**Dacă repo-ul e public**, rulează pe server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mihaelacurca-code/Quizy/main/deploy/oracle-setup.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/mihaelacurca-code/cyberguard-quizy/main/deploy/oracle-setup.sh | sudo bash
 ```
 
 **Dacă repo-ul e privat**, ai nevoie de un token GitHub doar pentru citire:
 
 1. GitHub → **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
-2. **Repository access**: *Only select repositories* → `Quizy`. **Permissions → Contents**: *Read-only*. Expirarea poate fi scurtă (7 zile).
+2. **Repository access**: *Only select repositories* → `cyberguard-quizy`. **Permissions → Contents**: *Read-only*. Expirarea poate fi scurtă (7 zile).
 3. Copiază tokenul și rulează pe server comanda de mai jos. Lipește tokenul când ți-l cere (nu se vede pe ecran și nu rămâne în istoricul comenzilor), apoi Enter:
 
 ```bash
@@ -73,7 +73,7 @@ read -rsp "Token GitHub: " GITHUB_TOKEN; echo
 ```
 
 ```bash
-curl -fsSL -H "Authorization: token $GITHUB_TOKEN" https://raw.githubusercontent.com/mihaelacurca-code/Quizy/main/deploy/oracle-setup.sh | sudo GITHUB_TOKEN="$GITHUB_TOKEN" bash
+curl -fsSL -H "Authorization: token $GITHUB_TOKEN" https://raw.githubusercontent.com/mihaelacurca-code/cyberguard-quizy/main/deploy/oracle-setup.sh | sudo GITHUB_TOKEN="$GITHUB_TOKEN" bash
 ```
 
 Scriptul durează 2–5 minute și instalează Node.js, Quizy ca serviciu care pornește singur la restart, Caddy pentru HTTPS automat, deschide porturile în firewall-ul serverului și face backup zilnic al bazei de date (ultimele 14 zile, în `/var/backups/quizy`).
@@ -90,18 +90,30 @@ Deschide adresa în browser, creează evenimentul și salvează linkul de admini
 
 Când apare o versiune nouă în GitHub, rulezi din nou aceeași comandă de la pasul 5. Datele rămân neatinse.
 
-## Domeniul tău (opțional)
+## Domeniul tău: cyberguardquizy.com
 
-Dacă ai un domeniu, de ex. `quizy.exemplu.ro`:
+Ca Quizy să ruleze la **https://cyberguardquizy.com** în loc de adresa `…sslip.io`:
 
-1. La firma de unde ai domeniul, adaugă o înregistrare DNS de tip **A**: numele `quizy`, valoarea = IP-ul public al serverului.
-2. După ce se propagă (minute până la câteva ore), rulează pe server:
+1. La firma de la care ai cumpărat domeniul, deschide setările DNS ale lui `cyberguardquizy.com` și adaugă două înregistrări de tip **A**:
+
+   | Tip | Nume (Host) | Valoare | TTL |
+   |---|---|---|---|
+   | A | `@` | IP-ul public al serverului | implicit |
+   | A | `www` | același IP | implicit |
+
+   Dacă există deja înregistrări A sau AAAA pentru `@` sau `www` (de obicei o pagină „parcată” a firmei), șterge-le, altfel certificatul HTTPS nu se poate emite.
+
+2. Așteaptă să se propage (de la câteva minute la câteva ore). Verifici pe https://dnschecker.org cu `cyberguardquizy.com`: trebuie să apară IP-ul serverului.
+
+3. Rulează pe server:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/mihaelacurca-code/Quizy/main/deploy/oracle-setup.sh | sudo bash -s quizy.exemplu.ro
+curl -fsSL https://raw.githubusercontent.com/mihaelacurca-code/cyberguard-quizy/main/deploy/oracle-setup.sh | sudo bash -s cyberguardquizy.com
 ```
 
-(Pentru repo privat adaugă tokenul ca la pasul 5.)
+(Pentru repo privat, citește întâi tokenul ca la pasul 5, adaugă `-H "Authorization: token $GITHUB_TOKEN"` după `curl -fsSL` și pune `GITHUB_TOKEN="$GITHUB_TOKEN"` după `sudo`.)
+
+Scriptul obține certificatul HTTPS, iar `www.cyberguardquizy.com` trimite automat vizitatorii la `cyberguardquizy.com`. Codurile QR de pe ecranul de proiecție vor duce la `https://cyberguardquizy.com/e/COD`. Domeniul rămâne ținut minte: la actualizări rulezi comanda fără el.
 
 ## Când ceva nu merge
 
