@@ -1,7 +1,7 @@
 {
   "name": "quizy",
   "version": "1.0.0",
-  "description": "Sondaje live, quiz și Q&A pentru evenimente — gratuit, fără limită de întrebări sau participanți.",
+  "description": "CYBERGUARD Quizy: sondaje live, quiz și Q&A pentru evenimente — gratuit, fără limită de întrebări sau participanți.",
   "private": true,
   "type": "module",
   "main": "server/index.js",

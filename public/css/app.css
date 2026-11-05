@@ -226,3 +226,20 @@ input[type=text], input[type=number], textarea, select { background: rgb(2 8 24 
 .badge:empty { display: none; }
 .features { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .features .card + .card { margin-top: 0; }
+.brand { display: inline-flex; align-items: center; gap: .5rem; letter-spacing: .01em; }
+.brand img { height: 1.9em; width: auto; filter: drop-shadow(0 0 8px rgb(31 178 255 / 45%)); }
+.brand span { white-space: nowrap; }
+.small-brand { font-size: .85rem; }
+.small-brand img { height: 1.6em; }
+.topbar .grow { min-width: 0; }
+@media (max-width: 520px) {
+  .topbar { gap: .5rem; padding: .6rem .75rem; }
+  .topbar .brand { font-size: .95rem; gap: .35rem; }
+  .topbar .brand img { height: 1.7em; }
+  #name-btn { font-size: .8rem; padding: .3rem .5rem; white-space: nowrap; }
+}
+@media (max-width: 380px) {
+  .topbar { flex-wrap: wrap; }
+  .topbar > .grow { flex-basis: 100%; }
+  #name-btn { margin-left: auto; }
+}

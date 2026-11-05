@@ -1,4 +1,6 @@
-# Quizy
+# CYBERGUARD Quizy
+
+<img src="public/img/cyberguard-logo.svg" alt="CYBERGUARD" width="360">
 
 Sondaje live, quiz-uri și întrebări din public pentru evenimente — o alternativă open-source la Slido pe care o găzduiești singur. **Fără abonament, fără limită de sondaje, de întrebări sau de participanți.**
 

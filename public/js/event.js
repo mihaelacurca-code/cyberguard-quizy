@@ -55,7 +55,7 @@ for (const b of document.querySelectorAll('[data-sort]')) {
 function render() {
   if (!state) return;
   $('#app').classList.remove('hidden');
-  document.title = `${state.event.name} · Quizy`;
+  document.title = `${state.event.name} · CYBERGUARD Quizy`;
   $('#event-name').textContent = `${state.event.name} · ${state.event.code}`;
   const qa = state.event.settings.qaEnabled;
   $('#tabs').classList.toggle('hidden', !qa);

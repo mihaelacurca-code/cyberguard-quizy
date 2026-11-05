@@ -38,7 +38,7 @@ function joinBox() {
 
 function render() {
   clearInterval(timer);
-  document.title = `${state.event.name} · Quizy`;
+  document.title = `${state.event.name} · CYBERGUARD Quizy`;
   $('#online').textContent = `${votersLabel(state.online)} online`;
   const screen = state.event.settings.screen;
   const main = $('#main');

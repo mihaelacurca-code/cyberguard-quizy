@@ -47,7 +47,7 @@ const act = async (action, payload = {}) => {
 function render() {
   $('#app').classList.remove('hidden');
   const ev = state.event;
-  document.title = `${ev.name} · Administrare · Quizy`;
+  document.title = `${ev.name} · Administrare · CYBERGUARD Quizy`;
   $('#event-title').textContent = `${ev.name} · ${ev.code}`;
   $('#online').textContent = `● ${votersLabel(state.online)} online`;
   $('#present-link').href = `/present/${ev.code}`;
