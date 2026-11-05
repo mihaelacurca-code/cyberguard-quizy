@@ -97,6 +97,15 @@ CREATE TABLE IF NOT EXISTS scenario_runs (
   UNIQUE (scenario_id, run)
 );
 
+CREATE TABLE IF NOT EXISTS event_assets (
+  event_id    INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  kind        TEXT NOT NULL,
+  mime        TEXT NOT NULL,
+  data        BLOB NOT NULL,
+  updated_at  INTEGER NOT NULL,
+  PRIMARY KEY (event_id, kind)
+);
+
 CREATE TABLE IF NOT EXISTS app_settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL

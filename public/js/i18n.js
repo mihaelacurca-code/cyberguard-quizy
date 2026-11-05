@@ -399,6 +399,23 @@ const EN = {
   'Decizia sălii': 'Room\'s decision',
   'Voturi': 'Votes',
   'aleasă de facilitator': 'chosen by the facilitator',
+
+  // client look
+  'Aspect pentru client': 'Client look',
+  'Fără logo': 'No logo',
+  'Încarcă logo': 'Upload logo',
+  'Șterge logo-ul': 'Remove logo',
+  'PNG, JPG sau WebP, cel mult 500 KB. Arată cel mai bine pe fundal transparent.': 'PNG, JPG or WebP, at most 500 KB. Looks best on a transparent background.',
+  'Culoarea principală': 'Main color',
+  'Revino la albastrul CYBERGUARD': 'Back to CYBERGUARD blue',
+  'Fundal': 'Background',
+  'Neon, cu rețea și glob': 'Neon, with network and globe',
+  'Simplu': 'Plain',
+  'Ascunde marca CYBERGUARD Quizy pe telefoane și pe proiector': 'Hide the CYBERGUARD Quizy brand on phones and the projector',
+  'Logo-ul poate avea cel mult 500 KB.': 'The logo can be at most 500 KB.',
+  'Logo încărcat.': 'Logo uploaded.',
+  'Ștergi logo-ul clientului?': 'Remove the client logo?',
+  'Raport de eveniment': 'Event report',
 };
 
 const PLURALS = {

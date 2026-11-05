@@ -157,3 +157,73 @@ export function timeLeft(poll, skew = 0) {
 export function copy(text) {
   navigator.clipboard?.writeText(text).then(() => toast(t('Copiat.')), () => toast(t('Nu am putut copia.'), true));
 }
+
+// ---------- per-event look ----------
+const hexRgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+const mix = (rgb, to, t) => rgb.map((c, i) => Math.round(c + (to[i] - c) * t));
+const luminance = (rgb) => {
+  const [r, g, b] = rgb.map((c) => { const s = c / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const toHsl = ([r, g, b]) => {
+  r /= 255; g /= 255; b /= 255;
+  const max = Math.max(r, g, b); const min = Math.min(r, g, b); const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h = max === r ? (g - b) / d + (g < b ? 6 : 0) : max === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return [h / 6, s, l];
+};
+const fromHsl = ([h, s, l]) => {
+  if (!s) return [l, l, l].map((v) => Math.round(v * 255));
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s; const p = 2 * l - q;
+  const f = (t) => { t = (t + 1) % 1; return t < 1 / 6 ? p + (q - p) * 6 * t : t < 1 / 2 ? q : t < 2 / 3 ? p + (q - p) * (2 / 3 - t) * 6 : p; };
+  return [f(h + 1 / 3), f(h), f(h - 1 / 3)].map((v) => Math.round(v * 255));
+};
+// Raises lightness (keeping hue and saturation) until the color reads on the dark background:
+// luminance 0.2 gives at least 4.5:1 contrast against the near-black page.
+const legible = (rgb) => {
+  const [h, s] = toHsl(rgb);
+  let [, , l] = toHsl(rgb);
+  let out = rgb;
+  while (luminance(out) < 0.2 && l < 0.95) { l += 0.03; out = fromHsl([h, s, l]); }
+  return out;
+};
+const css = (rgb, a) => (a === undefined ? `rgb(${rgb.join(' ')})` : `rgb(${rgb.join(' ')} / ${a}%)`);
+const BRAND_VARS = ['--primary', '--primary-strong', '--primary-deep', '--primary-soft', '--primary-ink', '--glow', '--glow-color', '--c1', '--c4'];
+
+// The client color adjusted to read on a dark background, plus a lighter variant.
+export function brandAccent(hex) {
+  if (!/^#[0-9a-f]{6}$/i.test(hex || '')) return null;
+  const main = legible(hexRgb(hex));
+  return { main: css(main), strong: css(mix(main, [255, 255, 255], 0.2)), glow: css(main, 80) };
+}
+
+// Applies the event's accent color, background and logo. A dark client color (e.g. navy) is
+// lightened until it reads on the dark background; the original is kept for gradient starts.
+export function applyBrand(event) {
+  const brand = event?.settings?.brand || {};
+  const root = document.documentElement.style;
+  if (/^#[0-9a-f]{6}$/i.test(brand.color || '')) {
+    const base = hexRgb(brand.color);
+    const main = legible(base);
+    const strong = mix(main, [255, 255, 255], 0.2);
+    root.setProperty('--primary', css(main));
+    root.setProperty('--primary-strong', css(strong));
+    root.setProperty('--primary-deep', css(luminance(base) < 0.05 ? mix(base, [255, 255, 255], 0.25) : base));
+    root.setProperty('--primary-soft', css(main, 16));
+    root.setProperty('--primary-ink', luminance(main) > 0.45 ? '#06101f' : '#ffffff');
+    root.setProperty('--glow', `0 0 0 1px ${css(main, 55)}, 0 0 18px ${css(main, 45)}`);
+    root.setProperty('--glow-color', css(strong, 60));
+    root.setProperty('--c1', css(main));
+    root.setProperty('--c4', css(strong));
+  } else {
+    BRAND_VARS.forEach((v) => root.removeProperty(v));
+  }
+  document.body.classList.toggle('plain-bg', brand.background === 'plain');
+  document.body.classList.toggle('white-label', Boolean(brand.hideProduct));
+  const src = brand.logo ? `/brand/${encodeURIComponent(event.code)}/logo?v=${brand.logo}` : '';
+  for (const img of document.querySelectorAll('img.client-logo')) {
+    if (src) { if (img.getAttribute('src') !== src) img.src = src; img.hidden = false; } else { img.removeAttribute('src'); img.hidden = true; }
+  }
+}

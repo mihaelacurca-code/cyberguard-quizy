@@ -246,3 +246,49 @@ test('report: admin key or panel session only, with stats, polls, test and certi
     await server.close();
   }
 });
+
+// ---------- client look ----------
+
+test('brand settings are validated', () => {
+  const { store, ev } = setup();
+  store.updateEvent(ev(), { settings: { brand: { color: '#C8102E', background: 'plain', hideProduct: true } } });
+  assert.deepEqual(ev().settings.brand, { color: '#c8102e', background: 'plain', hideProduct: true, logo: 0 });
+  assert.throws(() => store.updateEvent(ev(), { settings: { brand: { color: 'red' } } }), /#1a2b3c/);
+  assert.throws(() => store.updateEvent(ev(), { settings: { brand: { background: 'video' } } }), /Fundal/);
+  store.updateEvent(ev(), { settings: { brand: { color: '' } } });
+  assert.equal(ev().settings.brand.color, '');
+  assert.equal(ev().settings.brand.hideProduct, true, 'other brand fields are kept');
+});
+
+test('logo upload: admin only, raster images only, size limit, served sandboxed', async () => {
+  const server = createApp();
+  await new Promise((r) => server.http.listen(0, r));
+  const base = `http://localhost:${server.http.address().port}`;
+  try {
+    const { code, adminKey } = server.store.createEvent('Client');
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(64, 1)]);
+    const post = (body, headers = {}) => fetch(`${base}/api/events/${code}/logo`, { method: 'POST', headers: { 'Content-Type': 'image/png', ...headers }, body });
+
+    assert.equal((await post(png)).status, 403);
+    const svg = await post(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'), { 'X-Admin-Key': adminKey, 'Content-Type': 'image/svg+xml' });
+    assert.equal(svg.status, 400);
+    assert.match((await svg.json()).error, /PNG, JPG sau WebP/);
+    const big = await post(Buffer.concat([png, Buffer.alloc(600 * 1024)]), { 'X-Admin-Key': adminKey, 'X-Lang': 'en' });
+    assert.equal(big.status, 413);
+    assert.match((await big.json()).error, /500 KB/);
+
+    assert.equal((await post(png, { 'X-Admin-Key': adminKey })).status, 200);
+    const v = server.store.getEvent(code).settings.brand.logo;
+    assert.ok(v > 0);
+    const got = await fetch(`${base}/brand/${code}/logo?v=${v}`);
+    assert.equal(got.headers.get('content-type'), 'image/png');
+    assert.match(got.headers.get('content-security-policy'), /sandbox/);
+    assert.deepEqual(Buffer.from(await got.arrayBuffer()), png);
+
+    assert.equal((await fetch(`${base}/api/events/${code}/logo`, { method: 'DELETE', headers: { 'X-Admin-Key': adminKey } })).status, 200);
+    assert.equal(server.store.getEvent(code).settings.brand.logo, 0);
+    assert.equal((await fetch(`${base}/brand/${code}/logo`)).status, 404);
+  } finally {
+    await server.close();
+  }
+});

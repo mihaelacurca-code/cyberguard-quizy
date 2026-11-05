@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Server } from 'socket.io';
 import QRCode from 'qrcode';
 import { openDb } from './db.js';
-import { createStore, UserError } from './store.js';
+import { createStore, UserError, LOGO_MAX_BYTES } from './store.js';
 import { localize, pickLang } from './i18n.js';
 import { SCENARIO_EXAMPLE } from './scenario.js';
 
@@ -115,6 +115,41 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     res.json({ code: ev.code, name: ev.name });
   });
 
+  // ---------- client logo ----------
+  const adminOf = (req) => store.verifyAdmin(req.params.code, req.get('x-admin-key')) || (panelAuthed(req) ? store.getEvent(req.params.code) : null);
+
+  app.post('/api/events/:code/logo', express.raw({ type: () => true, limit: LOGO_MAX_BYTES + 1024 }), (req, res) => {
+    if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări.' });
+    const ev = adminOf(req);
+    if (!ev) {
+      limits.miss.take(req.ip);
+      return res.status(403).json({ error: 'Acces interzis.' });
+    }
+    try {
+      store.setLogo(ev, Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0));
+      changed(ev.code);
+      res.json({ ok: true });
+    } catch (e) {
+      sendError(res, e);
+    }
+  });
+
+  app.delete('/api/events/:code/logo', (req, res) => {
+    const ev = adminOf(req);
+    if (!ev) return res.status(403).json({ error: 'Acces interzis.' });
+    store.removeLogo(ev);
+    changed(ev.code);
+    res.json({ ok: true });
+  });
+
+  app.get('/brand/:code/logo', (req, res) => {
+    const logo = store.getLogo(req.params.code);
+    if (!logo) return res.status(404).end();
+    // The URL carries ?v=<upload time>, so a new logo gets a new address.
+    res.set('Content-Type', logo.mime).set('Cache-Control', 'public, max-age=86400')
+      .set('Content-Security-Policy', "default-src 'none'; sandbox").send(Buffer.from(logo.data));
+  });
+
   app.get('/api/events/:code/report', (req, res) => {
     if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări.' });
     const ev = store.verifyAdmin(req.params.code, req.get('x-admin-key')) || (panelAuthed(req) ? store.getEvent(req.params.code) : null);
@@ -214,6 +249,14 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   });
 
   app.use('/api', (req, res) => res.status(404).json({ error: 'Nu există.' }));
+  // Bodies over the limit (a too-large logo) get a readable message instead of Express's HTML page.
+  app.use((err, req, res, next) => {
+    if (err?.type === 'entity.too.large') {
+      return res.status(413).json({ error: req.path.endsWith('/logo') ? 'Logo-ul poate avea cel mult 500 KB.' : 'Cererea este prea mare.' });
+    }
+    if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'Cerere invalidă.' });
+    next(err);
+  });
 
   // ---------- realtime ----------
 

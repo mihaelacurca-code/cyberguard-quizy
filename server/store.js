@@ -38,7 +38,21 @@ const DEFAULT_SETTINGS = {
   certIssuer: '',
   certMinScore: 0,
   scenario: null,
+  // Per-event look: client logo (stored separately), accent color, background, product brand.
+  brand: { color: '', background: 'neon', hideProduct: false, logo: 0 },
 };
+
+export const LOGO_MAX_BYTES = 500 * 1024;
+
+// Only raster formats, recognised by their first bytes. SVG is refused: it can carry script,
+// and the logo is served from the app's own origin.
+export function imageType(buf) {
+  if (!buf || buf.length < 12) return null;
+  if (buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47) return 'image/png';
+  if (buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) return 'image/jpeg';
+  if (buf.toString('ascii', 0, 4) === 'RIFF' && buf.toString('ascii', 8, 12) === 'WEBP') return 'image/webp';
+  return null;
+}
 
 const now = () => Date.now();
 const hash = (s) => createHash('sha256').update(s).digest('hex');
@@ -135,7 +149,7 @@ export function createStore(db) {
     recentQuestionsOf: q('SELECT COUNT(*) AS n FROM questions WHERE event_id = ? AND participant_id = ? AND created_at > ?'),
 
     certOf: q('SELECT * FROM certificates WHERE event_id = ? AND participant_id = ?'),
-    cert: q('SELECT c.*, e.name AS event_name, e.settings AS event_settings FROM certificates c JOIN events e ON e.id = c.event_id WHERE c.id = ?'),
+    cert: q('SELECT c.*, e.name AS event_name, e.code AS event_code, e.settings AS event_settings FROM certificates c JOIN events e ON e.id = c.event_id WHERE c.id = ?'),
     insertCert: q('INSERT INTO certificates (id, event_id, participant_id, name, score, issued_at) VALUES (?, ?, ?, ?, ?, ?)'),
     certCount: q('SELECT COUNT(*) AS n FROM certificates WHERE event_id = ?'),
     certsOfEvent: q('SELECT id, name, score, issued_at FROM certificates WHERE event_id = ? ORDER BY name COLLATE NOCASE'),
@@ -159,6 +173,11 @@ export function createStore(db) {
     runsOfEvent: q(`SELECT r.*, s.title, s.definition FROM scenario_runs r JOIN scenarios s ON s.id = r.scenario_id
                     WHERE s.event_id = ? ORDER BY r.ended_at DESC`),
 
+    putAsset: q(`INSERT INTO event_assets (event_id, kind, mime, data, updated_at) VALUES (?, ?, ?, ?, ?)
+                 ON CONFLICT(event_id, kind) DO UPDATE SET mime = excluded.mime, data = excluded.data, updated_at = excluded.updated_at`),
+    getAsset: q('SELECT mime, data, updated_at FROM event_assets WHERE event_id = ? AND kind = ?'),
+    deleteAsset: q('DELETE FROM event_assets WHERE event_id = ? AND kind = ?'),
+
     getSetting: q('SELECT value FROM app_settings WHERE key = ?'),
     putSetting: q('INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
   };
@@ -179,7 +198,8 @@ export function createStore(db) {
 
   function hydrateEvent(row) {
     if (!row) return null;
-    return { ...row, settings: { ...DEFAULT_SETTINGS, ...JSON.parse(row.settings) } };
+    const saved = JSON.parse(row.settings);
+    return { ...row, settings: { ...DEFAULT_SETTINGS, ...saved, brand: { ...DEFAULT_SETTINGS.brand, ...(saved.brand || {}) } } };
   }
 
   function getEvent(code) {
@@ -221,6 +241,20 @@ export function createStore(db) {
     }
     if ('certIssuer' in settings) next.certIssuer = text(settings.certIssuer, LIMITS.issuer, 'Emitentul', { required: false });
     if ('certMinScore' in settings) next.certMinScore = int(settings.certMinScore, 0, 100, 0);
+    if (settings.brand && typeof settings.brand === 'object') {
+      const b = { ...ev.settings.brand };
+      if ('color' in settings.brand) {
+        const c = String(settings.brand.color || '').trim().toLowerCase();
+        if (c && !/^#[0-9a-f]{6}$/.test(c)) throw new UserError('Culoarea trebuie să fie de forma #1a2b3c.');
+        b.color = c;
+      }
+      if ('background' in settings.brand) {
+        if (!['neon', 'plain'].includes(settings.brand.background)) throw new UserError('Fundal necunoscut.');
+        b.background = settings.brand.background;
+      }
+      if ('hideProduct' in settings.brand) b.hideProduct = Boolean(settings.brand.hideProduct);
+      next.brand = b;
+    }
     if ('testRound' in settings) {
       if (settings.testRound !== null && !TEST_ROUNDS.includes(settings.testRound)) throw new UserError('Etapă de test necunoscută.');
       if (settings.testRound && !st.testPolls.all(ev.id).length) throw new UserError('Adaugă întâi întrebări în test.');
@@ -251,6 +285,25 @@ export function createStore(db) {
     if (st.eventByCode.get(code)) throw new UserError('Codul este deja folosit de alt eveniment.');
     st.setCode.run(code, ev.id);
     return code;
+  }
+
+  function setLogo(ev, buf) {
+    const mime = imageType(buf);
+    if (!mime) throw new UserError('Logo-ul trebuie să fie o imagine PNG, JPG sau WebP.');
+    if (buf.length > LOGO_MAX_BYTES) throw new UserError('Logo-ul poate avea cel mult 500 KB.');
+    const t = now();
+    st.putAsset.run(ev.id, 'logo', mime, buf, t);
+    st.updateEvent.run(ev.name, JSON.stringify({ ...ev.settings, brand: { ...ev.settings.brand, logo: t } }), ev.id);
+  }
+
+  function removeLogo(ev) {
+    st.deleteAsset.run(ev.id, 'logo');
+    st.updateEvent.run(ev.name, JSON.stringify({ ...ev.settings, brand: { ...ev.settings.brand, logo: 0 } }), ev.id);
+  }
+
+  function getLogo(code) {
+    const ev = getEvent(code);
+    return ev ? st.getAsset.get(ev.id, 'logo') || null : null;
   }
 
   function rotateAdminKey(ev) {
@@ -653,7 +706,13 @@ export function createStore(db) {
     const row = typeof id === 'string' ? st.cert.get(id.trim().toUpperCase()) : null;
     if (!row) return null;
     const settings = { ...DEFAULT_SETTINGS, ...JSON.parse(row.event_settings) };
-    return { id: row.id, name: row.name, event: row.event_name, score: row.score, issuedAt: row.issued_at, issuer: settings.certIssuer };
+    const brand = { ...DEFAULT_SETTINGS.brand, ...(settings.brand || {}) };
+    return {
+      id: row.id, name: row.name, event: row.event_name, score: row.score, issuedAt: row.issued_at, issuer: settings.certIssuer,
+      logo: brand.logo ? `/brand/${encodeURIComponent(row.event_code)}/logo?v=${brand.logo}` : null,
+      hideProduct: Boolean(brand.hideProduct),
+      color: brand.color || '',
+    };
   }
 
   // ---------- tabletop scenarios ----------
@@ -1039,7 +1098,7 @@ export function createStore(db) {
   }
 
   return {
-    createEvent, getEvent, requireEvent, verifyAdmin, updateEvent, deleteEvent, changeCode, rotateAdminKey, listEvents,
+    createEvent, getEvent, requireEvent, verifyAdmin, updateEvent, deleteEvent, changeCode, rotateAdminKey, listEvents, setLogo, removeLogo, getLogo,
     appSetting, setAppSetting, testReport, issueCertificate, certificateView, replyToQuestion, reportData,
     createScenario, deleteScenario, startScenario, scenarioVote, revealScenario, advanceScenario, backScenario, stopScenario, scenarioView, scenarioRuns,
     createPoll, createPolls, updatePoll, duplicatePoll, deletePoll, movePoll, setPollStatus, setShowResults, revealQuiz, resetPoll,

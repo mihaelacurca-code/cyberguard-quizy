@@ -70,6 +70,15 @@ function pollBlock(p, i) {
 
 function render(d) {
   const ev = d.event;
+  const brand = ev.settings?.brand || {};
+  // The client's color marks headings and bars; very light colors are darkened for white paper.
+  if (/^#[0-9a-f]{6}$/i.test(brand.color || '')) {
+    const rgb = [1, 3, 5].map((i) => parseInt(brand.color.slice(i, i + 2), 16));
+    const lum = (0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2]) / 255;
+    const ink = lum > 0.6 ? rgb.map((c) => Math.round(c * 0.55)) : rgb;
+    document.documentElement.style.setProperty('--accent', `rgb(${ink.join(' ')})`);
+    document.documentElement.style.setProperty('--accent-2', brand.color);
+  }
   document.title = `${t('Raport')} – ${ev.name}`;
   const s = d.stats;
   const test = d.test && d.test.total && (d.test.participants.pre || d.test.participants.post) ? d.test : null;
@@ -78,9 +87,9 @@ function render(d) {
 
   fill(doc,
     h('header', { class: 'cover' },
-      h('img', { src: '/img/cyberguard-mark.svg', alt: '' }),
+      h('img', { src: brand.logo ? `/brand/${encodeURIComponent(ev.code)}/logo?v=${brand.logo}` : '/img/cyberguard-mark.svg', alt: '', class: brand.logo ? 'client' : '' }),
       h('div', {},
-        h('div', { class: 'kicker' }, t('Raport de eveniment · CYBERGUARD Quizy')),
+        h('div', { class: 'kicker' }, brand.hideProduct ? t('Raport de eveniment') : t('Raport de eveniment · CYBERGUARD Quizy')),
         h('h1', {}, ev.name)),
       h('div', { class: 'meta' },
         h('span', {}, t('Data: '), h('strong', {}, fmtDate(ev.createdAt))),
@@ -160,7 +169,7 @@ function render(d) {
 
     h('footer', { class: 'foot' },
       h('span', {}, t('Generat la {date}', { date: fmtDate(d.generatedAt, true) })),
-      h('span', {}, `${location.host} · CYBERGUARD Quizy`)));
+      h('span', {}, brand.hideProduct ? location.host : `${location.host} · CYBERGUARD Quizy`)));
 }
 
 function kpi(value, label, good = false) {

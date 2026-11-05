@@ -1,4 +1,4 @@
-import { $, h, connect, codeFromPath, renderResults, timeLeft, votersLabel, TYPE_LABELS, fill } from './common.js';
+import { $, h, connect, codeFromPath, renderResults, timeLeft, votersLabel, TYPE_LABELS, fill, applyBrand } from './common.js';
 import { t, translatePage, langSwitch } from './i18n.js';
 
 translatePage();
@@ -33,6 +33,7 @@ const qr = () => h('img', { src: `/qr/${code}.svg`, alt: t('Cod QR pentru {url}'
 
 function joinBox() {
   return h('aside', { class: 'card join-box stack' },
+    h('img', { class: 'client-logo', alt: '', hidden: true }),
     h('div', { class: 'muted' }, t('Intră pe')),
     h('strong', {}, `${location.host}/e/`),
     h('div', { class: 'code' }, code),
@@ -42,7 +43,8 @@ function joinBox() {
 
 function render() {
   clearInterval(timer);
-  document.title = `${state.event.name} · CYBERGUARD Quizy`;
+  applyBrand(state.event);
+  document.title = state.event.settings.brand?.hideProduct ? state.event.name : `${state.event.name} · CYBERGUARD Quizy`;
   $('#online').textContent = `${votersLabel(state.online)} ${t('online')}`;
   const screen = state.event.settings.screen;
   const main = $('#main');
@@ -50,11 +52,13 @@ function render() {
   if (screen === 'join') {
     main.style.gridTemplateColumns = '1fr';
     fill(main, h('div', { class: 'join-full' },
+      h('img', { class: 'client-logo', alt: '', hidden: true }),
       h('h1', {}, state.event.name),
       h('p', { class: 'muted', style: { fontSize: '1.5rem' } }, t('Intră pe {url} sau scanează codul', { url: `${location.host}/e/` })),
       h('div', { class: 'code join-box' }, h('span', { class: 'code' }, code)),
       h('div', { class: 'join-box' }, qr()),
       h('p', { class: 'muted' }, `${votersLabel(state.online)} ${t('online')}`)));
+    applyBrand(state.event);
     return;
   }
   main.style.gridTemplateColumns = '';
@@ -73,6 +77,7 @@ function render() {
   }
   if (screen !== 'leaderboard') lastBoard = '';
   fill(main, h('section', {}, content), joinBox());
+  applyBrand(state.event);
 }
 
 function pollView() {

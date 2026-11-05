@@ -110,6 +110,35 @@
         </div>
 
         <div class="card stack">
+          <h2 data-i18n>Aspect pentru client</h2>
+          <div class="brand-preview">
+            <img id="logo-preview" class="client-logo" alt="" hidden>
+            <span id="logo-none" class="muted small" data-i18n>Fără logo</span>
+          </div>
+          <div class="row">
+            <label class="btn sm" for="logo-file" data-i18n>Încarcă logo</label>
+            <input id="logo-file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+            <button id="logo-remove" class="sm ghost danger hidden" type="button" data-i18n>Șterge logo-ul</button>
+          </div>
+          <p class="small muted" style="margin:0" data-i18n>PNG, JPG sau WebP, cel mult 500 KB. Arată cel mai bine pe fundal transparent.</p>
+          <div>
+            <label for="brand-color" data-i18n>Culoarea principală</label>
+            <div class="swatch-row">
+              <input id="brand-color" type="color" value="#1fb2ff">
+              <button id="brand-color-reset" class="sm ghost" type="button" data-i18n>Revino la albastrul CYBERGUARD</button>
+            </div>
+          </div>
+          <div>
+            <label for="brand-bg" data-i18n>Fundal</label>
+            <select id="brand-bg">
+              <option value="neon" data-i18n>Neon, cu rețea și glob</option>
+              <option value="plain" data-i18n>Simplu</option>
+            </select>
+          </div>
+          <label class="check"><input type="checkbox" id="brand-hide"> <span data-i18n>Ascunde marca CYBERGUARD Quizy pe telefoane și pe proiector</span></label>
+        </div>
+
+        <div class="card stack">
           <div class="row between">
             <h2 style="margin:0" data-i18n>Certificate de participare</h2>
             <span id="cert-count" class="badge"></span>

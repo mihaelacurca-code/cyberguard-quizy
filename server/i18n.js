@@ -98,6 +98,12 @@ const EXACT = {
   'Nimeni n-a votat încă. Alege tu ramura sau așteaptă voturile.': 'Nobody has voted yet. Choose the branch yourself or wait for votes.',
   'Scenariul s-a încheiat.': 'The scenario has ended.',
   'Ești deja la primul pas.': 'You are already at the first step.',
+  'Culoarea trebuie să fie de forma #1a2b3c.': 'The color must look like #1a2b3c.',
+  'Fundal necunoscut.': 'Unknown background.',
+  'Logo-ul trebuie să fie o imagine PNG, JPG sau WebP.': 'The logo must be a PNG, JPG or WebP image.',
+  'Logo-ul poate avea cel mult 500 KB.': 'The logo can be at most 500 KB.',
+  'Cererea este prea mare.': 'The request is too large.',
+  'Cerere invalidă.': 'Invalid request.',
 };
 
 export function toEnglish(message) {

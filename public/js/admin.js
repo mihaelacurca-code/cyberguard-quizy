@@ -3,7 +3,7 @@ import { t as tr, lang, translatePage, langSwitch } from './i18n.js';
 
 translatePage();
 $('#lang-slot').replaceWith(langSwitch());
-import { $, h, toast, storage, store, connect, codeFromPath, renderResults, TYPE_LABELS, votersLabel, copy, fill } from './common.js';
+import { $, h, toast, storage, store, connect, codeFromPath, renderResults, TYPE_LABELS, votersLabel, copy, fill, applyBrand } from './common.js';
 
 const code = codeFromPath();
 const hashKey = new URLSearchParams(location.hash.slice(1)).get('key');
@@ -62,6 +62,13 @@ function render() {
   $('#qa-moderation').checked = ev.settings.qaModeration;
   $('#closed').checked = ev.settings.closed;
   if (document.activeElement !== $('#code-input')) $('#code-input').value = ev.code;
+  applyBrand(ev);
+  const brand = ev.settings.brand || {};
+  $('#logo-none').classList.toggle('hidden', Boolean(brand.logo));
+  $('#logo-remove').classList.toggle('hidden', !brand.logo);
+  if (document.activeElement !== $('#brand-color')) $('#brand-color').value = brand.color || '#1fb2ff';
+  $('#brand-bg').value = brand.background || 'neon';
+  $('#brand-hide').checked = Boolean(brand.hideProduct);
   $('#cert-enabled').checked = ev.settings.certEnabled;
   if (!$('#cert-form').contains(document.activeElement)) {
     $('#cert-issuer').value = ev.settings.certIssuer || '';
@@ -570,3 +577,30 @@ function renderScenario() {
       r.ending ? `${r.ending.outcome === 'good' ? '✅' : r.ending.outcome === 'bad' ? '⛔' : '🏁'} ${r.ending.title}` : tr('oprit înainte de final'),
       ' · ', tr('{good} din {n} decizii recomandate', { good: r.good, n: r.decisions.length })))) : null);
 }
+
+
+// ---------- client look ----------
+const setBrand = (patch) => act('event:update', { settings: { brand: patch } });
+$('#brand-color').addEventListener('change', (e) => setBrand({ color: e.target.value }));
+$('#brand-color-reset').addEventListener('click', () => setBrand({ color: '' }));
+$('#brand-bg').addEventListener('change', (e) => setBrand({ background: e.target.value }));
+$('#brand-hide').addEventListener('change', (e) => setBrand({ hideProduct: e.target.checked }));
+$('#logo-file').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file) return;
+  if (file.size > 500 * 1024) return toast(tr('Logo-ul poate avea cel mult 500 KB.'), true);
+  const headers = { 'Content-Type': file.type || 'application/octet-stream', 'X-Lang': lang };
+  if (key) headers['X-Admin-Key'] = key;
+  const res = await fetch(`/api/events/${encodeURIComponent(state.event.code)}/logo`, { method: 'POST', headers, body: file });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return toast(data.error || tr('Ceva n-a mers. Încearcă din nou.'), true);
+  toast(tr('Logo încărcat.'));
+});
+$('#logo-remove').addEventListener('click', async () => {
+  if (!confirm(tr('Ștergi logo-ul clientului?'))) return;
+  const headers = { 'X-Lang': lang };
+  if (key) headers['X-Admin-Key'] = key;
+  const res = await fetch(`/api/events/${encodeURIComponent(state.event.code)}/logo`, { method: 'DELETE', headers });
+  if (!res.ok) toast(tr('Ceva n-a mers. Încearcă din nou.'), true);
+});

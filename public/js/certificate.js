@@ -1,6 +1,7 @@
 // Draws a participation certificate on a canvas and wraps it in a one-page PDF
 // (A4 landscape). Everything happens in the participant's browser.
 import { t, lang } from './i18n.js';
+import { brandAccent } from './common.js';
 
 const W = 2339; // A4 landscape at 200 dpi
 const H = 1654;
@@ -23,6 +24,7 @@ function fitText(ctx, text, maxWidth, size, weight = 700, family = 'system-ui, -
 }
 
 export async function drawCertificate(cert) {
+  const accent = brandAccent(cert.color) || { main: '#1fb2ff', strong: '#00d2ff', glow: 'rgba(0,210,255,0.8)' };
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
@@ -41,25 +43,35 @@ export async function drawCertificate(cert) {
   ctx.fillRect(0, 0, W, H);
 
   // frame
-  ctx.strokeStyle = '#1fb2ff';
+  ctx.strokeStyle = accent.main;
   ctx.lineWidth = 6;
-  ctx.shadowColor = 'rgba(0,210,255,0.8)';
+  ctx.shadowColor = accent.glow;
   ctx.shadowBlur = 24;
   ctx.strokeRect(70, 70, W - 140, H - 140);
   ctx.shadowBlur = 0;
-  ctx.strokeStyle = 'rgba(31,178,255,0.35)';
+  ctx.globalAlpha = 0.35;
+  ctx.strokeStyle = accent.main;
   ctx.lineWidth = 2;
   ctx.strokeRect(100, 100, W - 200, H - 200);
+  ctx.globalAlpha = 1;
 
-  const [mark, qr] = await Promise.all([loadImage('/img/cyberguard-mark.svg'), loadImage(`/qr/cert/${cert.id}.svg`)]);
-  if (mark) ctx.drawImage(mark, W / 2 - 75, 150, 150, 240);
+  const [mark, qr] = await Promise.all([loadImage(cert.logo || '/img/cyberguard-mark.svg'), loadImage(`/qr/cert/${cert.id}.svg`)]);
+  if (mark) {
+    // The client's logo (or the CYBERGUARD shield) fits a 520 x 240 box above the title.
+    const scale = Math.min(520 / mark.width, 240 / mark.height);
+    const w = mark.width * scale;
+    const hgt = mark.height * scale;
+    ctx.drawImage(mark, W / 2 - w / 2, 150 + (240 - hgt) / 2, w, hgt);
+  }
 
   ctx.textAlign = 'center';
-  ctx.fillStyle = '#e8f2ff';
-  ctx.font = '700 44px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
-  ctx.fillText('CYBERGUARD Quizy', W / 2, 455);
+  if (!cert.hideProduct) {
+    ctx.fillStyle = '#e8f2ff';
+    ctx.font = '700 44px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
+    ctx.fillText('CYBERGUARD Quizy', W / 2, 455);
+  }
 
-  ctx.fillStyle = '#00d2ff';
+  ctx.fillStyle = accent.strong;
   ctx.font = '800 96px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   ctx.fillText(t('CERTIFICAT DE PARTICIPARE'), W / 2, 590);
 
@@ -70,7 +82,7 @@ export async function drawCertificate(cert) {
   ctx.fillStyle = '#ffffff';
   fitText(ctx, cert.name, W - 500, 120, 800);
   ctx.fillText(cert.name, W / 2, 840);
-  ctx.strokeStyle = 'rgba(31,178,255,0.6)';
+  ctx.strokeStyle = accent.main;
   ctx.lineWidth = 3;
   ctx.beginPath();
   ctx.moveTo(W / 2 - 600, 880);

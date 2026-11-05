@@ -1,4 +1,4 @@
-import { $, h, toast, storage, store, connect, codeFromPath, renderResults, timeLeft, fill } from './common.js';
+import { $, h, toast, storage, store, connect, codeFromPath, renderResults, timeLeft, fill, applyBrand } from './common.js';
 import { t, translatePage, langSwitch } from './i18n.js';
 import { downloadCertificate } from './certificate.js';
 
@@ -60,7 +60,8 @@ for (const b of document.querySelectorAll('[data-sort]')) {
 function render() {
   if (!state) return;
   $('#app').classList.remove('hidden');
-  document.title = `${state.event.name} · CYBERGUARD Quizy`;
+  applyBrand(state.event);
+  document.title = state.event.settings.brand?.hideProduct ? state.event.name : `${state.event.name} · CYBERGUARD Quizy`;
   $('#event-name').textContent = `${state.event.name} · ${state.event.code}`;
   const qa = state.event.settings.qaEnabled;
   $('#tabs').classList.toggle('hidden', !qa);
