@@ -8,15 +8,13 @@
   <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
-  <header class="topbar">
-    <div class="grow event-head">
+  <header class="topbar event-topbar">
+    <div class="event-head">
       <img class="client-logo" alt="" hidden>
-      <div style="min-width:0">
-        <a class="brand product-brand" href="/"><img src="/img/cyberguard-mark.svg" alt="" width="22" height="35"><span>CYBERGUARD <b>Quizy</b></span></a>
-        <div id="event-name" class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
-      </div>
+      <a class="brand product-brand" href="/"><img src="/img/cyberguard-mark.svg" alt="" width="22" height="35"><span>CYBERGUARD <b>Quizy</b></span></a>
     </div>
-    <div class="row" style="flex-wrap:nowrap"><span id="lang-slot"></span><button id="name-btn" class="sm ghost" type="button"></button></div>
+    <div class="row topbar-tools"><span id="lang-slot"></span><button id="name-btn" class="sm ghost" type="button"></button></div>
+    <div id="event-name" class="small muted"></div>
   </header>
   <main class="wrap">
     <div id="error" class="card empty hidden"></div>

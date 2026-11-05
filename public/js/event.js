@@ -17,7 +17,7 @@ let revealedSeen = new Set();
 const name = () => storage('quizy:name', '');
 
 function renderName() {
-  $('#name-btn').textContent = name() ? `${name()} ✎` : t('Adaugă numele ✎');
+  $('#name-btn').textContent = (name() ? `${name()} ✎` : t('Adaugă numele ✎')).replace(/ ✎$/, '\u00a0✎');
   $('#ask-as').textContent = name() ? t('Trimiți ca {name}', { name: name() }) : t('Trimiți anonim');
 }
 $('#name-btn').addEventListener('click', () => {

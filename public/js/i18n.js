@@ -103,7 +103,7 @@ const EN = {
   'Cod QR pentru {url}': 'QR code for {url}',
   'Intră pe {url} sau scanează codul': 'Go to {url} or scan the code',
   'Intră pe {url}': 'Go to {url}',
-  'apasă F pentru ecran complet': 'press F for full screen',
+  'Ecran complet (F)': 'Full screen (F)',
   'Niciun sondaj încă': 'No poll yet',
   '{n} au răspuns': '{n} answered',
   'Trimite întrebările tale de pe telefon.': 'Send your questions from your phone.',

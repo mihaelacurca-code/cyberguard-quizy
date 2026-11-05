@@ -23,11 +23,18 @@ connect({
   },
 });
 
-document.addEventListener('keydown', (e) => {
-  if (e.key.toLowerCase() !== 'f') return;
+const toggleFullscreen = () => {
   if (document.fullscreenElement) document.exitFullscreen();
-  else document.documentElement.requestFullscreen?.();
+  else document.documentElement.requestFullscreen?.().catch(() => {});
+};
+document.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() !== 'f' || e.ctrlKey || e.metaKey || e.altKey) return;
+  toggleFullscreen();
 });
+// A button too, for touch screens, tablets and TVs without a keyboard. Hidden where the browser has no fullscreen API (iPhone).
+const fsBtn = $('#fs-btn');
+if (document.documentElement.requestFullscreen) fsBtn.addEventListener('click', toggleFullscreen);
+else fsBtn.remove();
 
 const qr = () => h('img', { src: `/qr/${code}.svg`, alt: t('Cod QR pentru {url}', { url: joinUrl }) });
 

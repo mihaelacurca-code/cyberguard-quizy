@@ -95,9 +95,16 @@ tr { break-inside: avoid; }
 .pin-region { position: absolute; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; border: 2px dashed var(--ok); background: rgb(20 138 92 / 15%); }
 
 @media (max-width: 600px) {
-  .doc { padding: 1.2rem 1rem; }
+  .doc { padding: 1.2rem 1rem; width: calc(100% - 16px); margin-top: .8rem; }
   .answers { columns: 1; }
   .cover h1 { font-size: 1.5rem; }
+  /* tables fit the phone: headers wrap, long codes break */
+  table { font-size: .8rem; }
+  th, th.num { white-space: normal; padding: .3rem .25rem; }
+  td { padding: .4rem .25rem; }
+  .test-head { gap: .6rem; }
+  .test-head .num { font-size: 1.6rem; }
+  .qimg, .pin-board { max-width: 100%; }
 }
 
 @page { size: A4; margin: 14mm 13mm 16mm; }
