@@ -6,7 +6,7 @@ Sondaje live, quiz-uri și întrebări din public pentru evenimente — o altern
 
 ## Demo
 
-[`demo/index.html`](demo/index.html) e o pagină de sine stătătoare, fără server: cele trei ecrane (organizator, telefonul unui participant, proiector) legate între ele, cu sondaje, quiz, word cloud și Q&A. Descarc-o și deschide-o în browser ca să vezi cum funcționează Quizy înainte să-l instalezi. Voturile rămân în pagină; nu e o versiune multi-utilizator.
+[`demo/index.html`](demo/index.html) e o pagină de sine stătătoare, fără server, în română și engleză (butonul RO / EN de lângă logo): cele trei ecrane (organizator, telefonul unui participant, proiector) legate între ele, cu sondaje, quiz, word cloud și Q&A. Descarc-o și deschide-o în browser ca să vezi cum funcționează Quizy înainte să-l instalezi. Voturile rămân în pagină; nu e o versiune multi-utilizator.
 
 ## Ce face
 

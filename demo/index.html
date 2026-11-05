@@ -119,7 +119,7 @@ textarea { resize: vertical; }
 .stage .badge { background: var(--stage-track); color: var(--stage-muted); }
 .stage .badge.live { background: var(--ok-soft); color: var(--ok); }
 .join { background: var(--surface); color: var(--text); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; align-self: start; }
-.stage .join .muted { color: var(--muted); }
+.stage .join .muted { color: var(--muted); max-width: 100%; overflow-wrap: anywhere; }
 .join .code { font-size: clamp(.85rem, 1.25vw, 1.1rem); font-weight: 800; letter-spacing: .03em; max-width: 100%; white-space: nowrap; color: var(--primary); }
 .join canvas { width: 100%; max-width: 140px; aspect-ratio: 1; image-rendering: pixelated; }
 .leader { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
@@ -144,7 +144,7 @@ input[type=text], textarea, select { background: rgb(2 8 24 / 70%); }
 .phone-top { background: rgb(10 22 52 / 90%); }
 .stage { border: 1px solid var(--border); box-shadow: 0 0 40px rgb(0 160 255 / 18%); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .join { background: #0b1836; color: var(--text); border: 1px solid var(--border); }
-.stage .join .muted { color: var(--muted); }
+.stage .join .muted { color: var(--muted); max-width: 100%; overflow-wrap: anywhere; }
 .toast { background: #0b1836; color: var(--text); border: 1px solid var(--border); }
 @media (prefers-reduced-motion: reduce) { body { background-attachment: scroll; } }
 </style>
@@ -215,6 +215,95 @@ input[type=text], textarea, select { background: rgb(2 8 24 / 70%); }
 <script>
 (() => {
   const $ = (s) => document.querySelector(s);
+
+  // ---------- language: Romanian text is the key; English comes from this table ----------
+  const LANG = (() => {
+    const hash = location.hash.slice(1);
+    if (hash === 'en' || hash === 'ro') return hash;
+    try { const s = localStorage.getItem('quizy-demo:lang'); if (s === 'en' || s === 'ro') return s; } catch { /* storage blocked */ }
+    return (navigator.language || '').toLowerCase().startsWith('ro') ? 'ro' : 'en';
+  })();
+  const EN = {
+    'demo interactiv': 'interactive demo',
+    'Cele trei ecrane ale aplicației, legate între ele: ce faci ca organizator apare pe telefon și pe proiector. Votează de pe telefon sau apasă „Simulează sala” ca să vezi 20 de participanți răspunzând.': 'The app\'s three screens, wired together: what you do as the organizer shows up on the phone and on the projector. Vote from the phone, or press "Simulate the room" to watch 20 participants answer.',
+    'Organizator': 'Organizer', 'Telefonul unui participant': 'A participant\'s phone', 'Ecranul de proiecție': 'Projector screen',
+    'Participant': 'Participant', 'Proiector': 'Projector',
+    'Sondaje și quiz-uri': 'Polls and quizzes', 'Import în bloc': 'Bulk import', '+ Sondaj nou': '+ New poll',
+    'Simulează sala (+20 de răspunsuri)': 'Simulate the room (+20 answers)', 'Ecranul proiectat arată': 'The projector shows',
+    'Întrebări din public': 'Audience questions', 'Sondaj': 'Poll', 'Întrebări': 'Questions',
+    'Intră pe cyberguardquizy.com/e/': 'Go to cyberguardquizy.com/e/', 'Cod QR decorativ pentru demo': 'Decorative QR code for the demo',
+    'În aplicația reală, acesta se deschide pe calculatorul legat la proiector, iar codul QR duce direct la eveniment.': 'In the real app this opens on the computer connected to the projector, and the QR code leads straight to the event.',
+    'Training NIS2 · Q7K2MX': 'NIS2 training · Q7K2MX',
+    'Alegere multiplă': 'Multiple choice', 'Text liber': 'Open text', 'Evaluare': 'Rating',
+    'Încă nu există cuvinte.': 'No words yet.', 'Încă nu există răspunsuri.': 'No answers yet.',
+    'Închis': 'Closed', 'Ciornă': 'Draft', '■ Oprește': '■ Stop', '▶ Redeschide': '▶ Reopen', '▶ Pornește': '▶ Start',
+    'Răspunsul corect apare pe telefoane și pe ecran.': 'The correct answer now shows on the phones and the screen.',
+    'Ascunde răspunsul': 'Hide answer', 'Dezvăluie răspunsul': 'Reveal answer', 'Șterge': 'Delete',
+    'Codul de intrare': 'Join code', 'Sondajul': 'The poll', 'Întrebările': 'The questions', 'Clasamentul': 'The leaderboard',
+    'Anonim': 'Anonymous', 'în așteptare': 'pending', 'Publică': 'Publish', 'Scoate de pe ecran': 'Remove from screen', 'Pe ecran': 'On screen',
+    'Nicio întrebare încă.': 'No questions yet.', 'Sondaj nou': 'New poll', 'Tip': 'Type', 'Întrebarea': 'Question',
+    'ex. Ce temă vreți să discutăm?': 'e.g. Which topic should we discuss?', 'Opțiuni, câte una pe rând': 'Options, one per line',
+    'Numărul opțiunii corecte': 'Number of the correct option', 'Creează și pornește': 'Create and start',
+    'Scrie întrebarea.': 'Write the question.', 'Adaugă cel puțin două opțiuni.': 'Add at least two options.',
+    'Numărul opțiunii corecte nu există.': 'There is no option with that number.', 'Sondajul e live pe telefoane.': 'The poll is live on the phones.',
+    'Nu am găsit nicio întrebare.': 'No questions found.',
+    'Rând liber între întrebări. Opțiunile încep cu „-”, cea corectă cu „*” (devine quiz). [nor] = word cloud, [nota 5] = evaluare, fără opțiuni = text liber.': 'Blank line between questions. Options start with "-", the correct one with "*" (makes it a quiz). [cloud] = word cloud, [rating 5] = rating, no options = open text.',
+    'Importă': 'Import', 'Pornește întâi un sondaj.': 'Start a poll first.',
+    'Niciun sondaj activ acum': 'No active poll right now', 'Pagina se actualizează singură.': 'This page updates by itself.',
+    'Nu ai răspuns.': 'You did not answer.', 'Corect! 🎉': 'Correct! 🎉', 'Greșit.': 'Wrong.',
+    'Răspuns înregistrat. Așteaptă dezvăluirea.': 'Answer recorded. Wait for the reveal.',
+    'Un singur răspuns. Cu cât răspunzi mai repede, cu atât mai multe puncte.': 'One answer only. The faster you answer, the more points you get.',
+    'Un cuvânt': 'One word', 'Răspunsul tău': 'Your answer', 'Trimite': 'Send', 'Mulțumim!': 'Thank you!', 'Rezultate': 'Results',
+    'Pune o întrebare…': 'Ask a question…', 'Întrebarea a fost publicată.': 'Your question has been published.',
+    'Votează întrebarea': 'Upvote this question', ' · pe ecran acum': ' · on screen now',
+    'Training NIS2 pentru IMM-uri': 'NIS2 training for SMEs',
+    'Scoate telefonul și intră pe cyberguardquizy.com/e/Q7K2MX': 'Take out your phone and go to cyberguardquizy.com/e/Q7K2MX',
+    'Sau scanează codul QR din dreapta.': 'Or scan the QR code on the right.', '🏆 Clasament': '🏆 Leaderboard',
+    'Clasamentul apare după ce dezvălui răspunsul unui quiz.': 'The leaderboard appears after you reveal a quiz answer.',
+    'Niciun sondaj încă': 'No poll yet', 'Tu': 'You',
+  };
+  const RULES = [
+    [/^(\d+) participanți$/, (m) => `${m[1]} participant${m[1] === '1' ? '' : 's'}`],
+    [/^din (\d+) · (\d+) participanți$/, (m) => `out of ${m[1]} · ${m[2]} participant${m[2] === '1' ? '' : 's'}`],
+    [/^● (\d+) online$/, (m) => `● ${m[1]} online`],
+    [/^(\d+) răsp\.$/, (m) => `${m[1]} ans.`],
+    [/^· (\d+) opțiuni$/, (m) => `· ${m[1]} options`],
+    [/^Locul (\d+) din (\d+)$/, (m) => `Place ${m[1]} of ${m[2]}`],
+    [/^Mai poți trimite (\d+)\.$/, (m) => `You can send ${m[1]} more.`],
+    [/^(\d+) au răspuns$/, (m) => `${m[1]} answered`],
+    [/^Întrebarea (\d+) are nevoie de text și de cel puțin două opțiuni\.$/, (m) => `Question ${m[1]} needs text and at least two options.`],
+    [/^Am importat (\d+) întrebări\. Apasă „Pornește” pe oricare\.$/, (m) => `Imported ${m[1]} questions. Press "Start" on any of them.`],
+    [/^(\d+)\. (Tu|Anonim)$/, (m) => `${m[1]}. ${m[2] === 'Tu' ? 'You' : 'Anonymous'}`],
+    [/^Anonim · ▲ (\d+)$/, (m) => `Anonymous · ▲ ${m[1]}`],
+  ];
+  function T(s) {
+    if (LANG !== 'en' || typeof s !== 'string') return s;
+    const core = s.trim();
+    if (!core) return s;
+    if (EN[core] !== undefined) return s.replace(core, EN[core]);
+    for (const [re, fn] of RULES) { const m = core.match(re); if (m) return s.replace(core, fn(m)); }
+    return s;
+  }
+  document.documentElement.lang = LANG;
+  // static markup
+  (function translateStatic() {
+    const walker = document.createTreeWalker(document.querySelector('.page'), NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) n.nodeValue = T(n.nodeValue);
+    for (const el of document.querySelectorAll('.page [aria-label]')) el.setAttribute('aria-label', T(el.getAttribute('aria-label')));
+  })();
+  (function langSwitch() {
+    const other = LANG === 'ro' ? 'en' : 'ro';
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = other.toUpperCase();
+    btn.setAttribute('aria-label', other === 'en' ? 'Switch to English' : 'Schimbă în română');
+    btn.addEventListener('click', () => {
+      try { localStorage.setItem('quizy-demo:lang', other); } catch { /* storage blocked */ }
+      location.hash = other;
+      location.reload();
+    });
+    document.querySelector('header.intro .brand').append(' ', btn);
+  })();
   function h(tag, attrs = {}, ...kids) {
     const el = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs || {})) {
@@ -223,9 +312,9 @@ input[type=text], textarea, select { background: rgb(2 8 24 / 70%); }
       else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
       else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
       else if (k in el && (typeof v !== 'string' || k === 'value')) el[k] = v;
-      else el.setAttribute(k, v === true ? '' : v);
+      else el.setAttribute(k, v === true ? '' : (k === 'placeholder' || k === 'aria-label' || k === 'title') ? T(v) : v);
     }
-    for (const c of kids.flat(Infinity)) if (c !== null && c !== undefined && c !== false) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+    for (const c of kids.flat(Infinity)) if (c !== null && c !== undefined && c !== false) el.append(c instanceof Node ? c : document.createTextNode(T(String(c))));
     return el;
   }
   let toastTimer;
@@ -239,6 +328,7 @@ input[type=text], textarea, select { background: rgb(2 8 24 / 70%); }
 
   const TYPES = { choice: 'Alegere multiplă', quiz: 'Quiz', wordcloud: 'Word cloud', open: 'Text liber', rating: 'Evaluare' };
   const ME = 'eu';
+  const EN_DATA = LANG === 'en';
   const NAMES = ['Ana', 'Mihai', 'Ioana', 'Radu', 'Elena', 'Andrei', 'Maria', 'Vlad', 'Cristina', 'Dan', 'Irina', 'Paul', 'Oana', 'Sorin', 'Diana', 'Alex', 'Bianca', 'Tudor', 'Raluca', 'Victor'];
   let seq = 1;
   let fake = 0;
@@ -254,15 +344,17 @@ input[type=text], textarea, select { background: rgb(2 8 24 / 70%); }
   const poll = (p) => ({ id: seq++, status: 'draft', revealed: false, votes: new Map(), ...p });
   state.polls.push(
     poll({ type: 'choice', question: 'Who are you?', options: ['Public authority · CSIRT/SOC', 'Essential or important entity', 'Vendor/MSSP', 'Academia', 'Other'], status: 'live' }),
-    poll({ type: 'quiz', question: 'Ce înseamnă NIS2?', options: ['Directivă UE privind securitatea cibernetică', 'Un standard ISO', 'O lege doar pentru bănci'], correct: [0] }),
-    poll({ type: 'wordcloud', question: 'Un cuvânt despre securitatea în firma ta', maxEntries: 3 }),
-    poll({ type: 'rating', question: 'Cât de utilă a fost sesiunea?', scale: 5 }),
+    EN_DATA
+      ? poll({ type: 'quiz', question: 'What is NIS2?', options: ['An EU cybersecurity directive', 'An ISO standard', 'A law for banks only'], correct: [0] })
+      : poll({ type: 'quiz', question: 'Ce înseamnă NIS2?', options: ['Directivă UE privind securitatea cibernetică', 'Un standard ISO', 'O lege doar pentru bănci'], correct: [0] }),
+    poll({ type: 'wordcloud', question: EN_DATA ? 'One word about security in your company' : 'Un cuvânt despre securitatea în firma ta', maxEntries: 3 }),
+    poll({ type: 'rating', question: EN_DATA ? 'How useful was this session?' : 'Cât de utilă a fost sesiunea?', scale: 5 }),
   );
   [[0, 9], [1, 14], [2, 5], [3, 3], [4, 2]].forEach(([opt, n]) => { for (let i = 0; i < n; i++) state.polls[0].votes.set('seed' + opt + '-' + i, { v: [opt], name: '', at: 0 }); });
   state.questions.push(
-    { id: seq++, text: 'Cum aplicăm NIS2 într-un IMM fără echipă IT?', author: 'Ioana', up: new Set(['a', 'b', 'c', 'd', 'e', 'f', 'g']), status: 'visible', hl: false },
-    { id: seq++, text: 'Care sunt termenele de raportare a unui incident?', author: '', up: new Set(['a', 'b', 'c']), status: 'visible', hl: false },
-    { id: seq++, text: 'Furnizorii de cloud intră și ei sub incidență?', author: 'Radu', up: new Set(), status: 'pending', hl: false },
+    { id: seq++, text: EN_DATA ? 'How do we apply NIS2 in an SME without an IT team?' : 'Cum aplicăm NIS2 într-un IMM fără echipă IT?', author: 'Ioana', up: new Set(['a', 'b', 'c', 'd', 'e', 'f', 'g']), status: 'visible', hl: false },
+    { id: seq++, text: EN_DATA ? 'What are the deadlines for reporting an incident?' : 'Care sunt termenele de raportare a unui incident?', author: '', up: new Set(['a', 'b', 'c']), status: 'visible', hl: false },
+    { id: seq++, text: EN_DATA ? 'Are cloud providers covered too?' : 'Furnizorii de cloud intră și ei sub incidență?', author: 'Radu', up: new Set(), status: 'pending', hl: false },
   );
 
   const live = () => state.polls.find((p) => p.status === 'live') || null;
@@ -381,7 +473,7 @@ input[type=text], textarea, select { background: rgb(2 8 24 / 70%); }
   // editor
   $('#btn-new').addEventListener('click', () => {
     const form = $('#editor');
-    const draft = { type: 'choice', question: '', options: 'Da\nNu\nNu știu', correct: 1 };
+    const draft = { type: 'choice', question: '', options: EN_DATA ? 'Yes\nNo\nNot sure' : 'Da\nNu\nNu știu', correct: 1 };
     const draw = () => {
       const opts = draft.type === 'choice' || draft.type === 'quiz';
       form.replaceChildren(
@@ -425,10 +517,10 @@ input[type=text], textarea, select { background: rgb(2 8 24 / 70%); }
 
   // bulk import (same rules as the app)
   const TAGS = [
-    [/^\[(nor|word ?cloud|cuvinte)\]\s*/i, (p) => { p.type = 'wordcloud'; }],
-    [/^\[(text|liber|deschis)\]\s*/i, (p) => { p.type = 'open'; }],
+    [/^\[(nor|cloud|word ?cloud|cuvinte|words)\]\s*/i, (p) => { p.type = 'wordcloud'; }],
+    [/^\[(text|liber|deschis|open)\]\s*/i, (p) => { p.type = 'open'; }],
     [/^\[(multiplu|multi|multiple)\]\s*/i, (p) => { p.multi = true; }],
-    [/^\[(nota|notă|rating|evaluare|stele)(?:\s+(\d+))?\]\s*/i, (p, m) => { p.type = 'rating'; p.scale = Math.min(10, Math.max(3, Number(m[2]) || 5)); }],
+    [/^\[(nota|notă|rating|evaluare|stele|stars|scale)(?:\s+(\d+))?\]\s*/i, (p, m) => { p.type = 'rating'; p.scale = Math.min(10, Math.max(3, Number(m[2]) || 5)); }],
   ];
   function parsePolls(text) {
     const out = []; let cur = null;
@@ -455,7 +547,18 @@ input[type=text], textarea, select { background: rgb(2 8 24 / 70%); }
     finish();
     return out;
   }
-  const EXAMPLE = `Ce temă vreți să aprofundăm?
+  const EXAMPLE = EN_DATA ? `Which topic should we go deeper into?
+- Incident reporting
+- Risk management
+- Supply chain
+
+Who is responsible for NIS2 in the organization?
+* Management
+- Only the IT department
+
+[cloud] The first thing you will change tomorrow
+
+[rating 10] How prepared is your company?` : `Ce temă vreți să aprofundăm?
 - Raportarea incidentelor
 - Managementul riscului
 - Lanțul de aprovizionare
@@ -492,8 +595,8 @@ Cine răspunde de NIS2 în organizație?
   });
 
   // simulated audience
-  const WORDS = ['parole', 'backup', 'instruire', 'MFA', 'inventar', 'actualizări', 'phishing', 'backup', 'MFA', 'proceduri', 'MFA'];
-  const TEXTS = ['Mai multe exemple practice', 'Un model de plan de răspuns', 'Exerciții tabletop', 'Checklist pentru IMM-uri'];
+  const WORDS = EN_DATA ? ['passwords', 'backup', 'training', 'MFA', 'inventory', 'updates', 'phishing', 'backup', 'MFA', 'procedures', 'MFA'] : ['parole', 'backup', 'instruire', 'MFA', 'inventar', 'actualizări', 'phishing', 'backup', 'MFA', 'proceduri', 'MFA'];
+  const TEXTS = EN_DATA ? ['More practical examples', 'A response plan template', 'Tabletop exercises', 'A checklist for SMEs'] : ['Mai multe exemple practice', 'Un model de plan de răspuns', 'Exerciții tabletop', 'Checklist pentru IMM-uri'];
   $('#simulate').addEventListener('click', () => {
     const p = live();
     if (!p) return toast('Pornește întâi un sondaj.', true);
