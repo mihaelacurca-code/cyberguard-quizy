@@ -47,7 +47,8 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   app.get('/e/:code', page('event.html'));
   app.get('/admin/:code', page('admin.html'));
   app.get('/present/:code', page('present.html'));
-  app.use(express.static(PUBLIC, { index: false, maxAge: '1h' }));
+  // No long cache: after an update every browser picks up the new scripts (ETag keeps repeat loads cheap).
+  app.use(express.static(PUBLIC, { index: false, maxAge: 0 }));
 
   app.get('/healthz', (req, res) => res.json({ ok: true }));
 
