@@ -304,3 +304,19 @@ table.events tr:last-child td { border-bottom: 0; }
 .verify-badge.bad { background: var(--danger-soft); color: var(--danger); }
 .verify-row { display: flex; justify-content: space-between; gap: 1rem; padding: .55rem 0; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .verify-row strong { overflow-wrap: anywhere; }
+
+/* ---------- tabletop scenarios ---------- */
+.scenario-text { white-space: pre-line; }
+.scenario-text.big { font-size: clamp(1.1rem, 1.9vw, 1.6rem); line-height: 1.45; max-width: 60ch; }
+.scenario-choice + .scenario-choice { margin-top: .6rem; }
+.scenario-path { margin: .5rem 0 0; padding-left: 1.3rem; display: flex; flex-direction: column; gap: .25rem; }
+.scenario-path.big { font-size: clamp(1rem, 1.6vw, 1.35rem); }
+.scenario-console { border: 1px solid var(--primary); box-shadow: var(--glow); border-radius: 12px; padding: .9rem; margin-bottom: .6rem; }
+.scenario-opt { border: 1px solid var(--border); border-radius: 10px; padding: .55rem .7rem; }
+.scenario-opt.good { border-color: rgb(51 230 168 / 50%); }
+.scenario-item { border: 1px solid var(--border); border-radius: 10px; padding: .55rem .7rem; }
+.scenario-stage .kicker { font-size: 1.1rem; margin-bottom: .4rem; }
+.scenario-stage .outcome.good { color: var(--ok); text-shadow: 0 0 18px rgb(51 230 168 / 45%); }
+.scenario-stage .outcome.bad { color: var(--danger); }
+.scenario-letter { font-size: clamp(1.1rem, 1.8vw, 1.5rem); margin-bottom: .6rem; box-shadow: none; }
+.reply.big { font-size: clamp(1rem, 1.6vw, 1.35rem); margin-top: 1rem; }

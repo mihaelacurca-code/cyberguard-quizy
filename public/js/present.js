@@ -63,6 +63,7 @@ function render() {
   if (screen === 'poll') content = pollView();
   else if (screen === 'qa') content = qaView();
   else if (screen === 'test') content = testView();
+  else if (screen === 'scenario') content = scenarioView();
   else {
     // Rebuild the podium only when the scores move, so its entrance animation plays once.
     const key = JSON.stringify(state.leaderboard);
@@ -141,6 +142,37 @@ function leaderboardView() {
     h('h1', {}, t('🏆 Clasament')),
     h('div', { class: 'podium' }, steps),
     lb.length > 3 ? h('ol', { class: 'leader rest', start: 4 }, lb.slice(3).map((r) => h('li', {}, h('span', {}, `${r.rank}. ${name(r)}`), h('span', { class: 'pts' }, r.streak >= 2 ? `🔥${r.streak} · ` : '', r.score)))) : null);
+}
+
+function scenarioView() {
+  const sc = state.scenario;
+  if (!sc) return h('div', { class: 'empty' }, h('h1', {}, t('Niciun scenariu nu rulează')));
+  const s = sc.step;
+  if (sc.phase === 'end') {
+    const good = sc.path.filter((p) => p.good).length;
+    return h('div', { class: 'scenario-stage' },
+      h('div', { class: 'muted kicker' }, `${sc.title} · ${t('Final')}`),
+      h('h1', { class: `outcome ${s.outcome || ''}` }, `${s.outcome === 'good' ? '✅ ' : s.outcome === 'bad' ? '⛔ ' : ''}${s.title}`),
+      s.text ? h('p', { class: 'scenario-text big' }, s.text) : null,
+      h('p', { class: 'muted' }, t('Sala a ales varianta recomandată în {good} din {n} decizii.', { good, n: sc.path.length })),
+      h('ol', { class: 'scenario-path big' }, sc.path.map((p) => h('li', {},
+        h('span', { class: 'muted' }, `${p.title}: `), p.choice, ' ', p.good ? '✓' : '⚠',
+        h('span', { class: 'muted' }, p.chosenBy === 'facilitator' ? t(' (aleasă de facilitator)') : t(' ({share}% din sală)', { share: p.share }))))));
+  }
+  const open = sc.phase === 'reveal';
+  const total = open ? s.options.reduce((a, o) => a + o.count, 0) : 0;
+  const best = s.options.find((o) => o.good);
+  return h('div', { class: 'scenario-stage' },
+    h('div', { class: 'muted kicker' }, `${sc.title} · ${t('pasul {n}', { n: sc.path.length + 1 })}`),
+    h('h1', {}, s.title),
+    s.text ? h('p', { class: 'scenario-text big' }, s.text) : null,
+    h('div', { class: 'bars' }, s.options.map((o, i) => (open
+      ? h('div', { class: `bar${o.good ? ' correct' : ''}` },
+        h('div', { class: 'bar-label' }, h('span', {}, `${String.fromCharCode(65 + i)}. ${o.label}`), h('span', { class: 'n' }, `${total ? Math.round((o.count / total) * 100) : 0}% · ${o.count}`)),
+        h('div', { class: 'bar-track' }, h('div', { class: `bar-fill${o.good ? '' : ' pre'}`, style: { width: `${total ? Math.round((o.count / total) * 100) : 0}%` } })))
+      : h('div', { class: 'card scenario-letter' }, `${String.fromCharCode(65 + i)}. ${o.label}`)))),
+    open && best?.feedback ? h('div', { class: 'reply big' }, h('strong', {}, t('Varianta recomandată: ')), best.feedback) : null,
+    !open ? h('p', { class: 'muted', style: { fontSize: '1.3rem' } }, t('{n} au votat', { n: votersLabel(sc.voters) })) : null);
 }
 
 function testView() {

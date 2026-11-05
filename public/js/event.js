@@ -82,6 +82,7 @@ function render() {
     lastRound = round;
     socket.call('me').then((r) => { me = r.me; testKey = ''; renderTest(); renderCert(); }).catch(() => {});
   }
+  renderScenario();
   renderTest();
   renderLeaderboard();
   renderPoll();
@@ -91,6 +92,56 @@ function render() {
 
 let lastRound;
 let testKey = '';
+let scenarioStep;
+
+// ---------- tabletop scenario ----------
+function renderScenario() {
+  const box = $('#scenario');
+  const sc = state.scenario;
+  if (!sc) { box.classList.add('hidden'); scenarioStep = undefined; return; }
+  box.classList.remove('hidden');
+  const stepKey = `${sc.run}:${sc.step.key}`;
+  // A new step starts with no vote of ours (the join snapshot is already current).
+  if (scenarioStep !== undefined && scenarioStep !== stepKey) me.scenarioChoice = null;
+  scenarioStep = stepKey;
+  const s = sc.step;
+
+  if (sc.phase === 'end') {
+    const good = sc.path.filter((p) => p.good).length;
+    fill(box,
+      h('span', { class: `badge ${s.outcome === 'bad' ? 'pending' : 'live'}` }, t('Final')),
+      h('h2', { style: { marginTop: '.6rem' } }, `${s.outcome === 'good' ? '✅ ' : s.outcome === 'bad' ? '⛔ ' : ''}${s.title}`),
+      s.text ? h('p', { class: 'scenario-text' }, s.text) : null,
+      h('p', { class: 'small muted' }, t('Sala a ales varianta recomandată în {good} din {n} decizii.', { good, n: sc.path.length })),
+      h('ol', { class: 'scenario-path small' }, sc.path.map((p) => h('li', {}, h('span', { class: 'muted' }, `${p.title}: `), p.choice, ' ', p.good ? '✓' : '⚠'))));
+    return;
+  }
+
+  const open = sc.phase === 'reveal';
+  const total = open ? s.options.reduce((a, o) => a + o.count, 0) : 0;
+  const mine = me.scenarioChoice;
+  fill(box,
+    h('div', { class: 'row between' },
+      h('span', { class: 'badge live' }, t('Scenariu · pasul {n}', { n: sc.path.length + 1 })),
+      h('span', { class: 'small muted' }, sc.title)),
+    h('h2', { style: { marginTop: '.6rem' } }, s.title),
+    s.text ? h('p', { class: 'scenario-text' }, s.text) : null,
+    h('p', { class: 'small muted' }, open ? t('Voturile sălii:') : t('Ce faceți? Votul se poate schimba până la dezvăluire.')),
+    s.options.map((o, i) => h('div', { class: 'scenario-choice' },
+      h('button', {
+        class: `option${open && o.good ? ' correct' : ''}`, type: 'button', 'aria-pressed': String(mine === i),
+        disabled: open || state.event.settings.closed,
+        onclick: async () => {
+          try {
+            me = (await socket.call('scenario:vote', { choice: i })).me;
+            renderScenario();
+          } catch (err) { toast(err.message, true); }
+        },
+      }, open && o.good ? '★ ' : '', o.label),
+      open ? h('div', { class: 'bar-track', style: { margin: '.3rem 0 0' } }, h('div', { class: `bar-fill${o.good ? '' : ' pre'}`, style: { width: `${total ? Math.round((o.count / total) * 100) : 0}%` } })) : null,
+      open ? h('div', { class: 'small muted', style: { marginTop: '.2rem' } }, `${total ? Math.round((o.count / total) * 100) : 0}% · ${o.count}`, mine === i ? t(' · votul tău') : '') : null,
+      open && o.feedback && (o.good || mine === i) ? h('div', { class: 'reply' }, o.feedback) : null)));
+}
 
 // ---------- knowledge test ----------
 function renderTest() {

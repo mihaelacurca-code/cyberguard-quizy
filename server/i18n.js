@@ -13,6 +13,20 @@ const label = (ro) => LABELS[ro] || ro;
 
 const RULES = [
   [/^Întrebarea (\d+): (.+)$/s, (m) => `Question ${m[1]}: ${toEnglish(m[2])}`],
+  // scenario text errors: "Rândul 12: …" plus the part after it
+  [/^Rândul (\d+): (.+)$/s, (m) => `Line ${m[1]}: ${toEnglish(m[2])}`],
+  [/^numele pasului „(.+)” poate conține doar litere, cifre, „-” și „_”\.$/, (m) => `the step name "${m[1]}" may only contain letters, digits, "-" and "_".`],
+  [/^pasul „(.+)” există deja\.$/, (m) => `step "${m[1]}" already exists.`],
+  [/^opțiunea trebuie să spună spre ce pas duce, de exemplu „- Izolăm rețeaua -> izolare”\.$/, () => 'the option must say which step it leads to, for example "- Isolate the network -> isolate".'],
+  [/^scenariul trebuie să înceapă cu un pas \(„## start: Titlu”\)\.$/, () => 'the scenario must start with a step ("## start: Title").'],
+  [/^titlul pasului e prea lung \(cel mult (\d+) de caractere\)\.$/, (m) => `the step title is too long (at most ${m[1]} characters).`],
+  [/^opțiunea nu are text\.$/, () => 'the option has no text.'],
+  [/^textul opțiunii e prea lung\.$/, () => 'the option text is too long.'],
+  [/^pasul „(.+)” nu există în scenariu\.$/, (m) => `step "${m[1]}" does not exist in the scenario.`],
+  [/^Pasul „(.+)”: descrierea e prea lungă \(cel mult (\d+) de caractere\)\.$/, (m) => `Step "${m[1]}": the description is too long (at most ${m[2]} characters).`],
+  [/^Pasul „(.+)” are o singură opțiune\. Adaugă încă una, sau niciuna dacă e un final\.$/, (m) => `Step "${m[1]}" has only one option. Add another, or none if it is an ending.`],
+  [/^Pasul „(.+)” are prea multe opțiuni \(cel mult (\d+)\)\.$/, (m) => `Step "${m[1]}" has too many options (at most ${m[2]}).`],
+  [/^Un scenariu poate avea cel mult (\d+) de pași\.$/, (m) => `A scenario can have at most ${m[1]} steps.`],
   [/^(.+) lipsește\.$/, (m) => `${label(m[1])} is missing.`],
   [/^(.+) poate avea cel mult (\d+) caractere\.$/, (m) => `${label(m[1])} can be at most ${m[2]} characters.`],
   [/^Cel mult (\d+) opțiuni\.$/, (m) => `At most ${m[1]} options.`],
@@ -75,6 +89,15 @@ const EXACT = {
   'Certificatul nu există.': 'This certificate does not exist.',
   'Panoul de administrare nu este configurat pe acest server.': 'The admin panel is not set up on this server.',
   'Parolă greșită.': 'Wrong password.',
+  'Scenariul nu are niciun pas („## start: Titlu”).': 'The scenario has no steps ("## start: Title").',
+  'Primul pas trebuie să aibă opțiuni de vot.': 'The first step must have options to vote on.',
+  'Scenariul nu are niciun final (un pas fără opțiuni).': 'The scenario has no ending (a step without options).',
+  'Scenariul nu există.': 'This scenario does not exist.',
+  'Niciun scenariu nu rulează acum.': 'No scenario is running right now.',
+  'Votul pentru acest pas s-a încheiat.': 'Voting on this step has closed.',
+  'Nimeni n-a votat încă. Alege tu ramura sau așteaptă voturile.': 'Nobody has voted yet. Choose the branch yourself or wait for votes.',
+  'Scenariul s-a încheiat.': 'The scenario has ended.',
+  'Ești deja la primul pas.': 'You are already at the first step.',
 };
 
 export function toEnglish(message) {

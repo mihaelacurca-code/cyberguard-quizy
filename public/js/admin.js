@@ -79,10 +79,11 @@ function render() {
   renderQuestions();
   renderLeaderboard();
   renderTest();
+  renderScenario();
 }
 
 function renderScreen() {
-  const screens = [['join', tr('Codul de intrare')], ['poll', tr('Sondajul')], ['qa', tr('Întrebările')], ['leaderboard', tr('Clasamentul')], ['test', tr('Rezultatele testului')]];
+  const screens = [['join', tr('Codul de intrare')], ['poll', tr('Sondajul')], ['qa', tr('Întrebările')], ['leaderboard', tr('Clasamentul')], ['test', tr('Rezultatele testului')], ['scenario', tr('Scenariul')]];
   fill($('#screen'), ...screens.map(([id, label]) => h('button', {
     type: 'button', class: 'sm', 'aria-pressed': String(state.event.settings.screen === id),
     onclick: () => act('event:update', { settings: { screen: id } }),
@@ -501,4 +502,71 @@ function renderTest() {
       h('button', { class: 'sm ghost danger', type: 'button', onclick: () => confirm(tr('Ștergi întrebarea din test și răspunsurile ei?')) && act('poll:delete', { id: q.id }) }, tr('Șterge'))),
     h('ul', { class: 'small', style: { margin: '.3rem 0 0', paddingLeft: '1.2rem' } },
       q.options.map((o, j) => h('li', { style: q.correct.includes(j) ? { color: 'var(--ok)', fontWeight: 600 } : {} }, o, q.correct.includes(j) ? ' ✓' : ''))))));
+}
+
+
+// ---------- tabletop scenarios ----------
+$('#scenario-example').addEventListener('click', async () => {
+  const res = await fetch('/api/scenario-example', { headers: { 'X-Lang': lang } });
+  $('#scenario-text').value = (await res.json()).text;
+});
+$('#scenario-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const res = await act('scenario:create', { text: $('#scenario-text').value });
+  if (!res) return;
+  $('#scenario-text').value = '';
+  $('#scenario-new').open = false;
+  toast(tr('Scenariul a fost adăugat.'));
+});
+
+function renderScenario() {
+  const sc = state.scenario;
+  const status = $('#scenario-status');
+  status.className = `badge${sc ? ' live' : ''}`;
+  status.textContent = sc ? tr('Rulează') : tr('{n} scenarii', { n: state.scenarios.length });
+
+  // the running scenario: the facilitator's console
+  if (!sc) {
+    fill($('#scenario-live'));
+  } else {
+    const s = sc.step;
+    const total = s.options.reduce((a, o) => a + (o.count || 0), 0);
+    const ended = sc.phase === 'end';
+    fill($('#scenario-live'), h('div', { class: 'scenario-console' },
+      h('div', { class: 'row between' },
+        h('strong', {}, sc.title),
+        h('span', { class: 'small muted' }, tr('Pasul {n} · {voters} voturi', { n: sc.path.length + 1, voters: sc.voters }))),
+      h('h3', { style: { margin: '.4rem 0 .2rem' } }, ended ? `${s.outcome === 'good' ? '✅ ' : s.outcome === 'bad' ? '⛔ ' : ''}${s.title}` : s.title),
+      s.text ? h('p', { class: 'small scenario-text' }, s.text) : null,
+      !ended ? h('div', { class: 'stack', style: { gap: '.4rem' } }, s.options.map((o, i) => h('div', { class: `scenario-opt${o.good ? ' good' : ''}` },
+        h('div', { class: 'row between' },
+          h('span', {}, o.good ? '★ ' : '', o.label),
+          h('span', { class: 'small muted' }, `${total ? Math.round((o.count / total) * 100) : 0}% · ${o.count}`)),
+        h('div', { class: 'bar-track' }, h('div', { class: 'bar-fill', style: { width: `${total ? Math.round((o.count / total) * 100) : 0}%` } })),
+        h('div', { class: 'row between small muted', style: { marginTop: '.2rem' } },
+          h('span', {}, tr('→ {step}', { step: o.nextTitle })),
+          h('button', { class: 'sm ghost', type: 'button', onclick: () => act('scenario:advance', { choice: i }) }, tr('Mergi pe ramura asta')))))) : null,
+      h('div', { class: 'row', style: { marginTop: '.6rem' } },
+        sc.phase === 'vote' ? h('button', { class: 'sm primary', type: 'button', onclick: () => act('scenario:reveal') }, tr('Dezvăluie voturile')) : null,
+        !ended ? h('button', { class: sc.phase === 'reveal' ? 'sm primary' : 'sm', type: 'button', onclick: () => act('scenario:advance') }, tr('Continuă cu varianta votată')) : null,
+        sc.path.length ? h('button', { class: 'sm', type: 'button', onclick: () => act('scenario:back') }, tr('↶ Înapoi un pas')) : null,
+        h('button', { class: 'sm ghost danger', type: 'button', onclick: () => act('scenario:stop') }, ended ? tr('Închide scenariul') : tr('Oprește scenariul'))),
+      sc.path.length ? h('ol', { class: 'scenario-path small' }, sc.path.map((p) => h('li', {},
+        h('span', { class: 'muted' }, `${p.title}: `), p.choice, ' ', p.good ? '✓' : '⚠',
+        h('span', { class: 'muted' }, p.chosenBy === 'facilitator' ? tr(' (aleasă de facilitator)') : tr(' ({share}% din sală)', { share: p.share }))))) : null));
+  }
+
+  fill($('#scenario-list'), state.scenarios.length ? state.scenarios.map((x) => h('div', { class: 'row between scenario-item' },
+    h('div', { class: 'grow' }, h('strong', {}, x.title), h('div', { class: 'small muted' }, tr('{steps} pași · {endings} finaluri', x))),
+    h('div', { class: 'row' },
+      h('button', { class: 'sm primary', type: 'button', onclick: () => (!sc || confirm(tr('Pornești alt scenariu? Cel care rulează acum se oprește.'))) && act('scenario:start', { id: x.id }) }, sc?.id === x.id ? tr('↺ Reia de la început') : tr('▶ Pornește')),
+      h('button', { class: 'sm ghost danger', type: 'button', onclick: () => confirm(tr('Ștergi scenariul „{title}”?', { title: x.title })) && act('scenario:delete', { id: x.id }) }, tr('Șterge'))))) : h('p', { class: 'muted small', style: { margin: 0 } }, tr('Niciun scenariu încă. Deschide „Scenariu nou” și pune exemplul ca să vezi formatul.')));
+
+  const runs = state.scenarioRuns;
+  fill($('#scenario-runs'), runs.length ? h('details', {},
+    h('summary', {}, tr('Parcurgeri încheiate ({n})', { n: runs.length })),
+    runs.map((r) => h('div', { class: 'small', style: { marginTop: '.4rem' } },
+      h('strong', {}, r.title), ' · ',
+      r.ending ? `${r.ending.outcome === 'good' ? '✅' : r.ending.outcome === 'bad' ? '⛔' : '🏁'} ${r.ending.title}` : tr('oprit înainte de final'),
+      ' · ', tr('{good} din {n} decizii recomandate', { good: r.good, n: r.decisions.length })))) : null);
 }

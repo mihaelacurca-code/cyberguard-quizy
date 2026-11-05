@@ -66,6 +66,37 @@ CREATE TABLE IF NOT EXISTS certificates (
   UNIQUE (event_id, participant_id)
 );
 
+CREATE TABLE IF NOT EXISTS scenarios (
+  id          INTEGER PRIMARY KEY,
+  event_id    INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  title       TEXT NOT NULL,
+  source      TEXT NOT NULL,
+  definition  TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS scenarios_event ON scenarios(event_id);
+
+CREATE TABLE IF NOT EXISTS scenario_votes (
+  scenario_id    INTEGER NOT NULL REFERENCES scenarios(id) ON DELETE CASCADE,
+  run            INTEGER NOT NULL,
+  step           TEXT NOT NULL,
+  participant_id TEXT NOT NULL,
+  choice         INTEGER NOT NULL,
+  created_at     INTEGER NOT NULL,
+  PRIMARY KEY (scenario_id, run, step, participant_id)
+);
+
+CREATE TABLE IF NOT EXISTS scenario_runs (
+  id          INTEGER PRIMARY KEY,
+  scenario_id INTEGER NOT NULL REFERENCES scenarios(id) ON DELETE CASCADE,
+  run         INTEGER NOT NULL,
+  ending      TEXT,
+  path        TEXT NOT NULL,
+  started_at  INTEGER NOT NULL,
+  ended_at    INTEGER NOT NULL,
+  UNIQUE (scenario_id, run)
+);
+
 CREATE TABLE IF NOT EXISTS app_settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL

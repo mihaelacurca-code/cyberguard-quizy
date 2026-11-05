@@ -8,6 +8,7 @@ import QRCode from 'qrcode';
 import { openDb } from './db.js';
 import { createStore, UserError } from './store.js';
 import { localize, pickLang } from './i18n.js';
+import { SCENARIO_EXAMPLE } from './scenario.js';
 
 const PUBLIC = fileURLToPath(new URL('../public', import.meta.url));
 const FLUSH_MS = 200;
@@ -89,6 +90,8 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   };
   const sweeper = setInterval(() => Object.values(limits).forEach((l) => l.sweep()), 60_000);
   sweeper.unref();
+
+  app.get('/api/scenario-example', (req, res) => res.json({ text: SCENARIO_EXAMPLE[pickLang(req.get('x-lang'))] }));
 
   app.get('/api/config', (req, res) => res.json({ openCreation: openCreation(), panel: Boolean(adminPassword) }));
 
@@ -263,6 +266,13 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     'question:reply': (ev, p) => store.replyToQuestion(ev, p.id, p.text),
     'test:create': (ev, p) => ({ id: store.createPoll(ev, p.poll, 'test') }),
     'test:import': (ev, p) => ({ ids: store.createPolls(ev, p.polls, 'test') }),
+    'scenario:create': (ev, p) => ({ id: store.createScenario(ev, p.text) }),
+    'scenario:delete': (ev, p) => store.deleteScenario(ev, p.id),
+    'scenario:start': (ev, p) => store.startScenario(ev, p.id),
+    'scenario:reveal': (ev) => store.revealScenario(ev),
+    'scenario:advance': (ev, p) => store.advanceScenario(ev, p.choice),
+    'scenario:back': (ev) => store.backScenario(ev),
+    'scenario:stop': (ev) => store.stopScenario(ev),
   };
 
   // Changing the code moves everyone who is connected: their rooms follow, and each page
@@ -364,6 +374,13 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
 
     on('me', () => {
       const { code, participantId } = requireAudience();
+      return { me: store.personalState(code, participantId) };
+    });
+
+    on('scenario:vote', ({ choice }) => {
+      const { code, participantId } = requireAudience();
+      store.scenarioVote(code, participantId, choice);
+      changed(code);
       return { me: store.personalState(code, participantId) };
     });
 

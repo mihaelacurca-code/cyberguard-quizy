@@ -1,12 +1,13 @@
 // Domain logic: events, polls, votes, Q&A. Everything here is synchronous
 // (node:sqlite) and knows nothing about HTTP or sockets.
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { parseScenario } from './scenario.js';
 
 export class UserError extends Error {}
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const POLL_TYPES = ['choice', 'quiz', 'wordcloud', 'open', 'rating'];
-const SCREENS = ['join', 'poll', 'qa', 'leaderboard', 'test'];
+const SCREENS = ['join', 'poll', 'qa', 'leaderboard', 'test', 'scenario'];
 const TEST_ROUNDS = ['pre', 'post'];
 const CERT_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 // Each correct answer in a row after the first adds this much, up to STREAK_CAP steps.
@@ -36,6 +37,7 @@ const DEFAULT_SETTINGS = {
   certEnabled: false,
   certIssuer: '',
   certMinScore: 0,
+  scenario: null,
 };
 
 const now = () => Date.now();
@@ -142,6 +144,20 @@ export function createStore(db) {
                          UNION SELECT participant_id FROM questions WHERE event_id = ?)`),
     responsesOf: q(`SELECT COUNT(*) AS n FROM votes v JOIN polls p ON p.id = v.poll_id WHERE p.event_id = ? AND p.kind = ''`),
     upvotesOfEvent: q('SELECT COUNT(*) AS n FROM upvotes u JOIN questions qu ON qu.id = u.question_id WHERE qu.event_id = ?'),
+
+    scenarios: q('SELECT id, title, definition, created_at FROM scenarios WHERE event_id = ? ORDER BY id'),
+    scenario: q('SELECT * FROM scenarios WHERE id = ? AND event_id = ?'),
+    insertScenario: q('INSERT INTO scenarios (event_id, title, source, definition, created_at) VALUES (?, ?, ?, ?, ?)'),
+    deleteScenario: q('DELETE FROM scenarios WHERE id = ?'),
+    scenarioVote: q(`INSERT INTO scenario_votes (scenario_id, run, step, participant_id, choice, created_at) VALUES (?, ?, ?, ?, ?, ?)
+                     ON CONFLICT(scenario_id, run, step, participant_id) DO UPDATE SET choice = excluded.choice, created_at = excluded.created_at`),
+    scenarioCounts: q('SELECT choice, COUNT(*) AS n FROM scenario_votes WHERE scenario_id = ? AND run = ? AND step = ? GROUP BY choice'),
+    scenarioMine: q('SELECT choice FROM scenario_votes WHERE scenario_id = ? AND run = ? AND step = ? AND participant_id = ?'),
+    saveRun: q(`INSERT INTO scenario_runs (scenario_id, run, ending, path, started_at, ended_at) VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(scenario_id, run) DO UPDATE SET ending = excluded.ending, path = excluded.path, ended_at = excluded.ended_at`),
+    deleteRun: q('DELETE FROM scenario_runs WHERE scenario_id = ? AND run = ?'),
+    runsOfEvent: q(`SELECT r.*, s.title, s.definition FROM scenario_runs r JOIN scenarios s ON s.id = r.scenario_id
+                    WHERE s.event_id = ? ORDER BY r.ended_at DESC`),
 
     getSetting: q('SELECT value FROM app_settings WHERE key = ?'),
     putSetting: q('INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
@@ -640,6 +656,171 @@ export function createStore(db) {
     return { id: row.id, name: row.name, event: row.event_name, score: row.score, issuedAt: row.issued_at, issuer: settings.certIssuer };
   }
 
+  // ---------- tabletop scenarios ----------
+
+  function patchSettings(ev, patch) {
+    st.updateEvent.run(ev.name, JSON.stringify({ ...ev.settings, ...patch }), ev.id);
+  }
+
+  function loadScenario(ev, id) {
+    const row = st.scenario.get(Number(id), ev.id);
+    if (!row) throw new UserError('Scenariul nu există.');
+    const def = JSON.parse(row.definition);
+    def.byKey = Object.fromEntries(def.steps.map((s) => [s.key, s]));
+    return { row, def };
+  }
+
+  function createScenario(ev, source) {
+    const def = parseScenario(source);
+    const r = st.insertScenario.run(ev.id, def.title, String(source), JSON.stringify(def), now());
+    return Number(r.lastInsertRowid);
+  }
+
+  function deleteScenario(ev, id) {
+    const { row } = loadScenario(ev, id);
+    if (ev.settings.scenario?.id === row.id) patchSettings(ev, { scenario: null });
+    st.deleteScenario.run(row.id);
+  }
+
+  function activeScenario(ev) {
+    const run = ev.settings.scenario;
+    if (!run) return null;
+    const row = st.scenario.get(run.id, ev.id);
+    if (!row) return null;
+    const def = JSON.parse(row.definition);
+    def.byKey = Object.fromEntries(def.steps.map((s) => [s.key, s]));
+    return { run, def, step: def.byKey[run.step] };
+  }
+
+  function requireActive(ev) {
+    const a = activeScenario(ev);
+    if (!a) throw new UserError('Niciun scenariu nu rulează acum.');
+    return a;
+  }
+
+  function stepCounts(a) {
+    const counts = a.step.options.map(() => 0);
+    for (const r of st.scenarioCounts.all(a.run.id, a.run.run, a.run.step)) if (r.choice < counts.length) counts[r.choice] = r.n;
+    return counts;
+  }
+
+  function startScenario(ev, id) {
+    const { row, def } = loadScenario(ev, id);
+    const t = now();
+    patchSettings(ev, { scenario: { id: row.id, run: t, step: def.start, phase: 'vote', path: [], startedAt: t }, screen: 'scenario' });
+  }
+
+  function scenarioVote(code, participantId, choice) {
+    const ev = requireEvent(code);
+    if (ev.settings.closed) throw new UserError('Evenimentul este închis.');
+    const pid = participant(participantId);
+    const a = requireActive(ev);
+    if (a.run.phase !== 'vote') throw new UserError('Votul pentru acest pas s-a încheiat.');
+    const c = Number(choice);
+    if (!Number.isInteger(c) || c < 0 || c >= a.step.options.length) throw new UserError('Alege o opțiune.');
+    st.scenarioVote.run(a.run.id, a.run.run, a.run.step, pid, c, now());
+  }
+
+  function revealScenario(ev) {
+    const a = requireActive(ev);
+    if (a.run.phase !== 'vote') return;
+    patchSettings(ev, { scenario: { ...a.run, phase: 'reveal' } });
+  }
+
+  function saveRun(ev, a, run, ending) {
+    st.saveRun.run(a.run.id, run.run, ending, JSON.stringify(run.path), run.startedAt, now());
+  }
+
+  // Moves to the branch the room voted for (most votes; a tie goes to the recommended option,
+  // then the first one), or to the branch the facilitator picks.
+  function advanceScenario(ev, choice) {
+    const a = requireActive(ev);
+    if (a.run.phase === 'end') throw new UserError('Scenariul s-a încheiat.');
+    const counts = stepCounts(a);
+    const voters = counts.reduce((s, n) => s + n, 0);
+    let pick = choice === undefined || choice === null ? null : Number(choice);
+    if (pick !== null && (!Number.isInteger(pick) || pick < 0 || pick >= a.step.options.length)) throw new UserError('Alege o opțiune.');
+    if (pick === null) {
+      if (!voters) throw new UserError('Nimeni n-a votat încă. Alege tu ramura sau așteaptă voturile.');
+      const max = Math.max(...counts);
+      const tied = counts.map((n, i) => (n === max ? i : -1)).filter((i) => i >= 0);
+      pick = tied.find((i) => a.step.options[i].good) ?? tied[0];
+    }
+    const option = a.step.options[pick];
+    const path = [...a.run.path, { step: a.run.step, choice: pick, counts, voters, good: option.good, chosenBy: choice === undefined || choice === null ? 'room' : 'facilitator' }];
+    const next = a.def.byKey[option.next];
+    const run = { ...a.run, step: next.key, phase: next.options.length ? 'vote' : 'end', path };
+    patchSettings(ev, { scenario: run });
+    if (run.phase === 'end') saveRun(ev, a, run, next.key);
+  }
+
+  function backScenario(ev) {
+    const a = requireActive(ev);
+    if (!a.run.path.length) throw new UserError('Ești deja la primul pas.');
+    const path = [...a.run.path];
+    const last = path.pop();
+    if (a.run.phase === 'end') st.deleteRun.run(a.run.id, a.run.run);
+    patchSettings(ev, { scenario: { ...a.run, step: last.step, phase: 'reveal', path } });
+  }
+
+  function stopScenario(ev) {
+    const a = activeScenario(ev);
+    if (a && a.run.phase !== 'end' && a.run.path.length) saveRun(ev, a, a.run, null);
+    patchSettings(ev, { scenario: null });
+  }
+
+  // What each audience sees. Counts and explanations stay hidden while the room is voting.
+  function scenarioView(ev, { admin = false, presenter = false } = {}) {
+    const a = activeScenario(ev);
+    if (!a) return null;
+    const { run, def, step } = a;
+    const open = run.phase !== 'vote';
+    const counts = stepCounts(a);
+    const voters = counts.reduce((s, n) => s + n, 0);
+    return {
+      id: run.id, run: run.run, title: def.title, phase: run.phase, voters,
+      step: {
+        key: step.key, title: step.title, text: step.text, outcome: step.outcome || null,
+        options: step.options.map((o, i) => ({
+          label: o.label,
+          ...(open || admin ? { count: counts[i] } : {}),
+          ...(open ? { good: o.good, feedback: o.feedback } : {}),
+          ...(admin ? { good: o.good, feedback: o.feedback, next: o.next, nextTitle: def.byKey[o.next].title } : {}),
+        })),
+      },
+      path: run.path.map((p) => {
+        const s = def.byKey[p.step];
+        return { title: s.title, choice: s.options[p.choice].label, good: p.good, voters: p.voters, share: p.voters ? Math.round((p.counts[p.choice] / p.voters) * 100) : 0, chosenBy: p.chosenBy };
+      }),
+      ...(admin || presenter ? { steps: def.steps.length } : {}),
+    };
+  }
+
+  function scenarioRuns(ev) {
+    return st.runsOfEvent.all(ev.id).map((r) => {
+      const def = JSON.parse(r.definition);
+      const byKey = Object.fromEntries(def.steps.map((s) => [s.key, s]));
+      const path = JSON.parse(r.path);
+      const end = r.ending ? byKey[r.ending] : null;
+      return {
+        title: r.title, startedAt: r.started_at, endedAt: r.ended_at,
+        ending: end ? { title: end.title, outcome: end.outcome || null } : null,
+        good: path.filter((p) => p.good).length,
+        decisions: path.map((p) => {
+          const s = byKey[p.step];
+          return { step: s.title, choice: s.options[p.choice].label, good: p.good, voters: p.voters, share: p.voters ? Math.round((p.counts[p.choice] / p.voters) * 100) : 0, chosenBy: p.chosenBy };
+        }),
+      };
+    });
+  }
+
+  function listScenarios(ev) {
+    return st.scenarios.all(ev.id).map((r) => {
+      const def = JSON.parse(r.definition);
+      return { id: r.id, title: r.title, steps: def.steps.length, endings: def.steps.filter((s) => !s.options.length).length };
+    });
+  }
+
   // ---------- Q&A ----------
 
   function ask(code, participantId, author, body) {
@@ -729,6 +910,7 @@ export function createStore(db) {
       poll: live ? publicPoll(live, { withResults: live.show_results || live.revealed }) : null,
       questions: visible,
       leaderboard: ev.settings.screen === 'leaderboard' ? leaderboard(ev, 10).map(({ id, ...r }) => r) : null,
+      scenario: scenarioView(ev),
       // Test questions go out without the correct answers.
       test: round ? { round, questions: st.testPolls.all(ev.id).map(hydratePoll).map((p) => ({ id: p.id, question: p.question, options: p.config.options })) } : null,
     };
@@ -757,6 +939,7 @@ export function createStore(db) {
       questions: visible,
       leaderboard: leaderboard(ev, 10).map(({ id, ...r }) => r),
       test: ev.settings.screen === 'test' || ev.settings.testRound ? testReport(ev) : null,
+      scenario: scenarioView(ev, { presenter: true }),
     };
   }
 
@@ -774,6 +957,9 @@ export function createStore(db) {
       })),
       test: testReport(ev),
       certificates: st.certCount.get(ev.id).n,
+      scenarios: listScenarios(ev),
+      scenario: scenarioView(ev, { admin: true }),
+      scenarioRuns: scenarioRuns(ev).slice(0, 10),
     };
   }
 
@@ -791,7 +977,10 @@ export function createStore(db) {
     // A round's score is shown once that round is closed, so it can't be used to fix answers.
     const open = ev.settings.testRound;
     const cert = st.certOf.get(ev.id, pid);
+    const sc = ev.settings.scenario;
+    const myChoice = sc ? st.scenarioMine.get(sc.id, sc.run, sc.step, pid) : null;
     return {
+      scenarioChoice: myChoice ? myChoice.choice : null,
       votes,
       upvotes: st.upvotesOf.all(ev.id, pid).map((r) => r.question_id),
       score: mine ? { rank: mine.rank, score: mine.score, correct: mine.correct, of: board.length, streak: mine.streak, best: mine.best } : null,
@@ -826,6 +1015,7 @@ export function createStore(db) {
       test: admin.test,
       testQuestions: admin.testQuestions,
       certificates: st.certsOfEvent.all(ev.id).map((c) => ({ id: c.id, name: c.name, score: c.score, issuedAt: c.issued_at })),
+      scenarioRuns: scenarioRuns(ev),
     };
   }
 
@@ -851,6 +1041,7 @@ export function createStore(db) {
   return {
     createEvent, getEvent, requireEvent, verifyAdmin, updateEvent, deleteEvent, changeCode, rotateAdminKey, listEvents,
     appSetting, setAppSetting, testReport, issueCertificate, certificateView, replyToQuestion, reportData,
+    createScenario, deleteScenario, startScenario, scenarioVote, revealScenario, advanceScenario, backScenario, stopScenario, scenarioView, scenarioRuns,
     createPoll, createPolls, updatePoll, duplicatePoll, deletePoll, movePoll, setPollStatus, setShowResults, revealQuiz, resetPoll,
     vote, results, leaderboard,
     ask, toggleUpvote, moderate,

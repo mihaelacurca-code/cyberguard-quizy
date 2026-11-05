@@ -43,7 +43,7 @@ test('every interface text has an English version', async () => {
   const { t } = await import('../public/js/i18n.js');
 
   const missing = new Set();
-  const ignore = new Set(['sm primary', 'sm', 'approve', 'archive', 'highlight', 'answer', 'restore', 'delete', 'Live', 'Quiz', 'Word cloud', 'participant', 'answer', 'Export CSV', 'online', 'Q&A', '● {n} online', 'closed', 'quiz', 'pending', 'live', 'pre']);
+  const ignore = new Set(['sm primary', 'sm', 'approve', 'archive', 'highlight', 'answer', 'restore', 'delete', 'Live', 'Quiz', 'Word cloud', 'participant', 'answer', 'Export CSV', 'online', 'Q&A', '● {n} online', 'closed', 'quiz', 'pending', 'live', 'pre', 'good', 'bad', 'end', 'reveal', '→ {step}']);
   for (const f of readdirSync(new URL('../public/js/', import.meta.url))) {
     for (const s of translatedLiterals(read(`public/js/${f}`))) {
       if (!ignore.has(s) && t(s) === s) missing.add(`${f}: ${s}`);
@@ -64,7 +64,7 @@ test('every interface text has an English version', async () => {
 
 test('every server message has an English version', () => {
   const missing = [];
-  for (const f of ['server/app.js', 'server/store.js']) {
+  for (const f of ['server/app.js', 'server/store.js', 'server/scenario.js']) {
     for (const m of read(f).matchAll(/(?:UserError\(|error: )'([^']+)'/g)) {
       if (toEnglish(m[1]) === m[1]) missing.push(m[1]);
     }
@@ -73,4 +73,6 @@ test('every server message has an English version', () => {
   assert.equal(toEnglish('Întrebarea lipsește.'), 'The question is missing.');
   assert.equal(toEnglish('Întrebarea 3: Adaugă cel puțin două opțiuni.'), 'Question 3: Add at least two options.');
   assert.equal(toEnglish('Poți trimite cel mult 3 răspunsuri.'), 'You can send at most 3 answers.');
+  assert.equal(toEnglish('Rândul 7: pasul „plata” nu există în scenariu.'), 'Line 7: step "plata" does not exist in the scenario.');
+  assert.equal(toEnglish('Pasul „start” are o singură opțiune. Adaugă încă una, sau niciuna dacă e un final.'), 'Step "start" has only one option. Add another, or none if it is an ending.');
 });

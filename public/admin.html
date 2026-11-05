@@ -52,6 +52,28 @@
           </details>
           <form id="test-import" class="stack"></form>
         </div>
+
+        <div class="card stack" id="scenario-card" style="margin-top:1.5rem">
+          <div class="row between">
+            <h2 style="margin:0" data-i18n>Scenarii decizionale (tabletop)</h2>
+            <span id="scenario-status" class="badge"></span>
+          </div>
+          <p class="small muted" style="margin:0" data-i18n>Sala votează pas cu pas ce face într-un incident, iar scenariul continuă pe ramura aleasă.</p>
+          <div id="scenario-live"></div>
+          <div id="scenario-list" class="stack"></div>
+          <details id="scenario-new">
+            <summary data-i18n>Scenariu nou</summary>
+            <form id="scenario-form" class="stack" style="margin-top:.5rem">
+              <p class="small muted" style="margin:0" data-i18n>Fiecare pas începe cu „## nume: Titlu”, urmat de descrierea situației. Opțiunile încep cu „-”, iar decizia recomandată cu „*”. După „->” scrii pasul spre care duce opțiunea, iar după „|” explicația arătată la dezvăluire. Un pas fără opțiuni e un final: „[+]” pentru final bun, „[-]” pentru final rău.</p>
+              <textarea id="scenario-text" rows="14" style="font-family:ui-monospace,monospace;font-size:.85rem"></textarea>
+              <div class="row">
+                <button type="submit" class="primary sm" data-i18n>Adaugă scenariul</button>
+                <button type="button" class="sm ghost" id="scenario-example" data-i18n>Pune exemplul</button>
+              </div>
+            </form>
+          </details>
+          <div id="scenario-runs"></div>
+        </div>
       </section>
 
       <section>

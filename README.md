@@ -25,6 +25,7 @@ Sondaje live, quiz-uri și întrebări din public pentru evenimente — o altern
 | **Răspunsul organizatorului în Q&A** | Organizatorul scrie un răspuns care apare sub întrebare, pe telefoane și pe ecran |
 | **Cod personalizat** | Codul aleator poate fi înlocuit cu unul ușor de reținut (de ex. `NIS2`); cei conectați sunt mutați automat |
 | **Podium și serii** | Clasamentul pe ecran apare ca podium animat; fiecare răspuns corect la rând aduce +100 de puncte bonus (până la +500) |
+| **Scenarii decizionale (tabletop)** | Un incident pas cu pas: proiectorul arată situația, sala votează pe telefon, facilitatorul dezvăluie voturile cu decizia recomandată și explicația, apoi scenariul continuă pe ramura votată (sau pe cea aleasă de facilitator; se poate reveni un pas). La final: deznodământul și drumul parcurs. Scenariul se scrie ca text (vezi mai jos); exemplul inclus e un atac ransomware la o clinică, cu raportarea NIS2 |
 | **Raport PDF după eveniment** | Butonul „Raport PDF” din administrare (sau „Raport” din panou) deschide un raport A4: cifrele principale, testul înainte/după, fiecare sondaj cu grafice, clasamentul, întrebările din public cu răspunsuri și certificatele emise. „Salvează ca PDF” îl descarcă din browser, cu text care se poate căuta |
 | **Panou de administrare** | La `/panel`, cu o parolă pe server: toate evenimentele, acces la oricare fără linkul de administrare, link nou de administrare, ștergere, și opțiunea ca doar administratorii să poată crea evenimente |
 
@@ -85,6 +86,35 @@ Ce ai învățat azi?
 Întrebările se separă printr-un rând liber. Dacă o întrebare are o greșeală (de ex. o singură opțiune), nu se importă nimic și primești numărul întrebării cu problema.
 
 Întrebările **din public** (Q&A) le trimit participanții din tab-ul „Întrebări” de pe telefon; organizatorul le moderează în panoul „Întrebări din public”.
+
+## Cum scrii un scenariu decizional
+
+```
+# Ransomware la o clinică privată
+
+## start: Luni, 08:10
+Recepția sună: pe trei calculatoare apare un mesaj de răscumpărare. Ce faceți primul lucru?
+* Deconectăm calculatoarele afectate de la rețea -> izolare | Izolarea oprește răspândirea.
+- Plătim, pacienții așteaptă -> plata | Plata nu garantează recuperarea datelor.
+
+## izolare: [+] Atacul e izolat
+Text de final.
+
+## plata: [-] Plată fără garanție
+Text de final.
+```
+
+| Scrii | Înseamnă |
+|---|---|
+| `# Titlu` | numele scenariului (opțional) |
+| `## nume: Titlu` | un pas; primul pas e începutul. `nume` e scurt, fără spații |
+| rândurile de sub pas | descrierea situației |
+| `- opțiune -> pas` | o variantă de vot și pasul spre care duce |
+| `* opțiune -> pas` | varianta recomandată |
+| `\| explicație` | textul arătat când dezvălui voturile |
+| pas fără opțiuni | un final; `[+]` final bun, `[-]` final rău |
+
+Dacă ceva nu se potrivește (un pas care nu există, o opțiune fără `->`), primești mesajul cu numărul rândului. În administrare, „Pune exemplul” încarcă scenariul complet, în română sau engleză.
 
 ## Pornire locală
 
