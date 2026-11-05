@@ -4,6 +4,14 @@ import { t, lang, translatePage, langSwitch } from './i18n.js';
 translatePage();
 $('#lang-slot').replaceWith(langSwitch());
 
+fetch('/api/config').then((r) => r.json()).then((cfg) => {
+  $('#panel-link').classList.toggle('hidden', !cfg.panel);
+  if (!cfg.openCreation) {
+    $('#create').classList.add('hidden');
+    $('#create-closed').classList.remove('hidden');
+  }
+}).catch(() => {});
+
 $('#join').addEventListener('submit', async (e) => {
   e.preventDefault();
   const code = $('#join-code').value.trim().toUpperCase();

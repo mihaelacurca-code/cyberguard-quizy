@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>Panou de administrare · CYBERGUARD Quizy</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/"><img src="/img/cyberguard-mark.svg" alt="" width="22" height="35"><span>CYBERGUARD <b>Quizy</b></span></a>
+    <div class="row">
+      <span id="lang-slot"></span>
+      <button id="logout" class="sm hidden" type="button" data-i18n>Ieșire</button>
+    </div>
+  </header>
+
+  <main class="wrap wide">
+    <section id="not-configured" class="card hidden" style="max-width:640px;margin:2rem auto">
+      <h2 data-i18n>Panoul nu este activat pe acest server</h2>
+      <p class="muted" data-i18n>Panoul se activează cu o parolă setată pe server (variabila ADMIN_PASSWORD). Scriptul de instalare o generează automat; o vezi pe server cu comanda de mai jos.</p>
+      <pre class="code-block">sudo cat /etc/quizy/env</pre>
+    </section>
+
+    <form id="login" class="card stack hidden" style="max-width:420px;margin:3rem auto">
+      <h1 data-i18n>Panou de administrare</h1>
+      <div>
+        <label for="password" data-i18n>Parola</label>
+        <input id="password" type="password" autocomplete="current-password" required>
+      </div>
+      <button class="primary" type="submit" data-i18n>Intră</button>
+    </form>
+
+    <div id="app" class="hidden">
+      <div class="row between" style="margin:1rem 0">
+        <h1 style="margin:0" data-i18n>Toate evenimentele</h1>
+        <form id="create" class="row">
+          <input id="event-name" type="text" maxlength="120" placeholder="Numele evenimentului" data-i18n-placeholder required>
+          <button class="primary" type="submit" data-i18n>Creează evenimentul</button>
+        </form>
+      </div>
+      <div class="card stack" style="margin-bottom:1rem">
+        <label class="check"><input type="checkbox" id="open-creation"> <span data-i18n>Oricine poate crea evenimente de pe pagina principală</span></label>
+        <p class="small muted" style="margin:0" data-i18n>Dacă debifezi, doar cine e autentificat în acest panou poate crea evenimente noi.</p>
+      </div>
+      <div id="events"></div>
+    </div>
+  </main>
+  <script type="module" src="/js/panel.js"></script>
+</body>
+</html>

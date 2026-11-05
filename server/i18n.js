@@ -6,6 +6,7 @@ const LABELS = {
   'Întrebarea': 'The question',
   'Opțiunea': 'The option',
   'Răspunsul': 'The answer',
+  'Emitentul': 'The issuer',
 };
 
 const label = (ro) => LABELS[ro] || ro;
@@ -16,6 +17,7 @@ const RULES = [
   [/^(.+) poate avea cel mult (\d+) caractere\.$/, (m) => `${label(m[1])} can be at most ${m[2]} characters.`],
   [/^Cel mult (\d+) opțiuni\.$/, (m) => `At most ${m[1]} options.`],
   [/^Poți trimite cel mult (\d+) răspunsuri\.$/, (m) => `You can send at most ${m[1]} answers.`],
+  [/^Certificatul cere cel puțin (\d+)% la testul final\.$/, (m) => `The certificate requires at least ${m[1]}% on the final test.`],
 ];
 
 const EXACT = {
@@ -58,6 +60,21 @@ const EXACT = {
   'Prea multe încercări.': 'Too many attempts.',
   'Nu există niciun eveniment cu acest cod.': 'There is no event with this code.',
   'Nu există.': 'Not found.',
+  'Etapă de test necunoscută.': 'Unknown test round.',
+  'Adaugă întâi întrebări în test.': 'Add questions to the test first.',
+  'Codul trebuie să aibă 3–20 litere sau cifre, fără spații.': 'The code must have 3–20 letters or digits, without spaces.',
+  'Codul este deja folosit de alt eveniment.': 'This code is already used by another event.',
+  'Testul acceptă doar întrebări cu răspuns corect.': 'The test accepts only questions with a correct answer.',
+  'Întrebările de test se deschid împreună, din secțiunea Test.': 'Test questions open together, from the Test section.',
+  'Testul nu este deschis acum.': 'The test is not open right now.',
+  'Certificatele nu sunt activate pentru acest eveniment.': 'Certificates are not enabled for this event.',
+  'Scrie-ți numele complet pentru certificat.': 'Enter your full name for the certificate.',
+  'Răspunde întâi la cel puțin o activitate din eveniment.': 'Take part in at least one activity of the event first.',
+  'Autentifică-te în panoul de administrare.': 'Sign in to the admin panel.',
+  'Crearea de evenimente este rezervată administratorilor.': 'Only administrators can create events on this server.',
+  'Certificatul nu există.': 'This certificate does not exist.',
+  'Panoul de administrare nu este configurat pe acest server.': 'The admin panel is not set up on this server.',
+  'Parolă greșită.': 'Wrong password.',
 };
 
 export function toEnglish(message) {

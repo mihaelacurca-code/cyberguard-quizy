@@ -55,12 +55,45 @@ CREATE TABLE IF NOT EXISTS upvotes (
   participant_id TEXT NOT NULL,
   PRIMARY KEY (question_id, participant_id)
 );
+
+CREATE TABLE IF NOT EXISTS certificates (
+  id             TEXT PRIMARY KEY,
+  event_id       INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  participant_id TEXT NOT NULL,
+  name           TEXT NOT NULL,
+  score          INTEGER,
+  issued_at      INTEGER NOT NULL,
+  UNIQUE (event_id, participant_id)
+);
+
+CREATE TABLE IF NOT EXISTS app_settings (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 `;
+
+// Columns added after the first release. Existing databases get them on startup;
+// every column has a default, so old rows stay valid.
+const COLUMNS = [
+  ['polls', 'kind', "TEXT NOT NULL DEFAULT ''"],
+  ['votes', 'round', "TEXT NOT NULL DEFAULT ''"],
+  ['questions', 'reply', "TEXT NOT NULL DEFAULT ''"],
+  ['questions', 'replied_at', 'INTEGER'],
+];
+
+function migrate(db) {
+  for (const [table, column, type] of COLUMNS) {
+    const has = db.prepare(`PRAGMA table_info(${table})`).all().some((c) => c.name === column);
+    if (!has) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}`);
+  }
+  db.exec('CREATE INDEX IF NOT EXISTS votes_round ON votes(poll_id, participant_id, round)');
+}
 
 export function openDb(file) {
   if (file !== ':memory:') mkdirSync(dirname(file), { recursive: true });
   const db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;');
   db.exec(SCHEMA);
+  migrate(db);
   return db;
 }

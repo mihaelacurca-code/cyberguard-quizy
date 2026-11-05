@@ -9,6 +9,14 @@ Acest document descrie modelul de securitate al Quizy, rezultatul auditului din 
 | Participant | Codul de 6 caractere al evenimentului | Votează, trimite cuvinte și răspunsuri, pune întrebări, votează întrebări |
 | Ecran de proiecție | Același cod (`/present/COD`) | Vede rezultatele live, întrebările publicate și clasamentul |
 | Organizator | Linkul secret de administrare (cheie aleatorie de 144 de biți) | Tot: sondaje, moderare, export, ștergerea evenimentului |
+| Administratorul serverului | Parola panoului (`ADMIN_PASSWORD`), la `/panel` | Toate evenimentele, link nou de administrare, ștergere, dreptul de a crea evenimente |
+| Oricine | Codul unui certificat (`/v/COD`) | Vede numele, evenimentul, data și scorul de pe acel certificat |
+
+**Panoul de administrare.** Parola stă doar pe server (`/etc/quizy/env`, citibil doar de root). La autentificare se emite un cookie `HttpOnly`, `SameSite=Strict` și `Secure` (sub HTTPS), valabil 12 ore, păstrat doar în memorie: o repornire a serverului delogează pe toată lumea. Parolele greșite intră în aceeași limită ca și codurile greșite (60 în 10 minute pe IP).
+
+**Certificatele** au coduri aleatorii de 10 caractere (aprox. 50 de biți). Pagina de verificare arată doar ce e tipărit pe certificat, iar codurile greșite intră în aceeași limită anti-ghicire. Numele de pe certificat îl scrie participantul și nu se mai poate schimba după emitere.
+
+**Codul personalizat** al unui eveniment (de ex. `NIS2`) e mai ușor de ghicit decât unul aleator. Asta schimbă doar cine poate intra ca participant; administrarea rămâne protejată de cheia secretă.
 
 Nu există conturi. Codul evenimentului nu e secret: oricine îl are poate participa, la fel ca la Slido. Cheia de administrare e singurul secret; serverul păstrează doar hash-ul ei SHA-256 și o compară în timp constant.
 

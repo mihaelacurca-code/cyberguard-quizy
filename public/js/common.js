@@ -22,6 +22,9 @@ export function h(tag, attrs = {}, ...children) {
 
 export const $ = (sel, root = document) => root.querySelector(sel);
 
+// replaceChildren() would print arrays and nulls as text; this flattens and drops them.
+export const fill = (el, ...kids) => el.replaceChildren(...kids.flat(Infinity).filter((k) => k !== null && k !== undefined && k !== false));
+
 let toastTimer;
 export function toast(message, error = false) {
   document.querySelector('.toast')?.remove();
@@ -64,6 +67,15 @@ export function connect({ code, role, key, onState, onJoin, onError }) {
   socket.on('connect', join);
   socket.on('state', onState);
   socket.on('deleted', () => onError?.(t('Evenimentul a fost șters.')));
+  // The organizer changed the event code: keep this page (and any saved admin link) on the new one.
+  socket.on('moved', ({ from, code: next }) => {
+    const saved = storage('quizy:events', []);
+    for (const e of saved) if (e.code === from) e.code = next;
+    store('quizy:events', saved);
+    const parts = location.pathname.split('/');
+    parts[2] = next;
+    location.replace(parts.join('/') + location.search);
+  });
   socket.on('disconnect', () => document.body.classList.add('offline'));
   socket.on('connect', () => document.body.classList.remove('offline'));
   socket.call = (event, payload) => new Promise((resolve, reject) => {

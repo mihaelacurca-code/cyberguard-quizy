@@ -1,5 +1,6 @@
 import express from 'express';
 import { createServer } from 'node:http';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { join } from 'node:path';
 import { Server } from 'socket.io';
@@ -11,7 +12,7 @@ import { localize, pickLang } from './i18n.js';
 const PUBLIC = fileURLToPath(new URL('../public', import.meta.url));
 const FLUSH_MS = 200;
 
-export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = false } = {}) {
+export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = false, adminPassword = '' } = {}) {
   const db = openDb(dbFile);
   const store = createStore(db);
   const app = express();
@@ -42,8 +43,34 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     next();
   });
 
+  // ---------- organizer panel sessions ----------
+  // One password for the whole server (ADMIN_PASSWORD). A login gives an HttpOnly cookie that
+  // opens every event's admin page; sessions live in memory and end on restart or after 12 h.
+  const SESSION_MS = 12 * 3_600_000;
+  const sessions = new Map();
+  const sha = (s) => createHash('sha256').update(String(s)).digest();
+  const passwordOk = (p) => Boolean(adminPassword) && typeof p === 'string' && timingSafeEqual(sha(p), sha(adminPassword));
+  const cookieValue = (header, name) => {
+    for (const part of String(header || '').split(';')) {
+      const [k, ...v] = part.trim().split('=');
+      if (k === name) return decodeURIComponent(v.join('='));
+    }
+    return '';
+  };
+  const sessionValid = (token) => {
+    const exp = token && sessions.get(token);
+    if (!exp) return false;
+    if (exp < Date.now()) { sessions.delete(token); return false; }
+    return true;
+  };
+  const panelAuthed = (req) => Boolean(adminPassword) && sessionValid(cookieValue(req.get('cookie'), 'quizy_panel'));
+  const requirePanel = (req, res, next) => (panelAuthed(req) ? next() : res.status(401).json({ error: 'Autentifică-te în panoul de administrare.' }));
+  const openCreation = () => store.appSetting('openCreation', true);
+
   const page = (name) => (req, res) => res.sendFile(join(PUBLIC, name));
   app.get('/', page('index.html'));
+  app.get('/panel', page('panel.html'));
+  app.get('/v/:id', page('verify.html'));
   app.get('/e/:code', page('event.html'));
   app.get('/admin/:code', page('admin.html'));
   app.get('/present/:code', page('present.html'));
@@ -62,7 +89,10 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   const sweeper = setInterval(() => Object.values(limits).forEach((l) => l.sweep()), 60_000);
   sweeper.unref();
 
+  app.get('/api/config', (req, res) => res.json({ openCreation: openCreation(), panel: Boolean(adminPassword) }));
+
   app.post('/api/events', (req, res) => {
+    if (!openCreation() && !panelAuthed(req)) return res.status(403).json({ error: 'Crearea de evenimente este rezervată administratorilor.' });
     if (!limits.create.take(req.ip)) return res.status(429).json({ error: 'Prea multe evenimente create într-o oră.' });
     try {
       res.status(201).json(store.createEvent(req.body?.name));
@@ -83,7 +113,7 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
 
   app.get('/api/events/:code/export.csv', (req, res) => {
     if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări.' });
-    const ev = store.verifyAdmin(req.params.code, req.get('x-admin-key'));
+    const ev = store.verifyAdmin(req.params.code, req.get('x-admin-key')) || (panelAuthed(req) ? store.getEvent(req.params.code) : null);
     if (!ev) {
       limits.miss.take(req.ip);
       return res.status(403).json({ error: 'Acces interzis.' });
@@ -93,6 +123,70 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     res.set('Cache-Control', 'no-store');
     res.set('Content-Disposition', `attachment; filename="quizy-${ev.code}.csv"`);
     res.send('﻿' + csv);
+  });
+
+  // ---------- certificates ----------
+  app.get('/api/certificates/:id', (req, res) => {
+    if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări.' });
+    const cert = store.certificateView(req.params.id);
+    if (!cert) {
+      limits.miss.take(req.ip);
+      return res.status(404).json({ error: 'Certificatul nu există.' });
+    }
+    res.json(cert);
+  });
+
+  app.get('/qr/cert/:id.svg', async (req, res) => {
+    const cert = store.certificateView(req.params.id);
+    if (!cert) return res.status(404).end();
+    const base = publicUrl || `${req.protocol}://${req.get('host')}`;
+    const svg = await QRCode.toString(`${base}/v/${cert.id}`, { type: 'svg', margin: 1, width: 400, errorCorrectionLevel: 'M' });
+    res.set('Content-Type', 'image/svg+xml').set('Cache-Control', 'private, max-age=300').send(svg);
+  });
+
+  // ---------- panel API ----------
+  app.post('/api/panel/login', (req, res) => {
+    if (!adminPassword) return res.status(404).json({ error: 'Panoul de administrare nu este configurat pe acest server.' });
+    if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări greșite. Încearcă peste câteva minute.' });
+    if (!passwordOk(req.body?.password)) {
+      limits.miss.take(req.ip);
+      return res.status(403).json({ error: 'Parolă greșită.' });
+    }
+    const token = randomBytes(32).toString('base64url');
+    sessions.set(token, Date.now() + SESSION_MS);
+    res.set('Set-Cookie', `quizy_panel=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_MS / 1000}${req.secure ? '; Secure' : ''}`);
+    res.json({ ok: true });
+  });
+
+  app.post('/api/panel/logout', (req, res) => {
+    sessions.delete(cookieValue(req.get('cookie'), 'quizy_panel'));
+    res.set('Set-Cookie', 'quizy_panel=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0');
+    res.json({ ok: true });
+  });
+
+  app.get('/api/panel/session', (req, res) => res.json({ configured: Boolean(adminPassword), authed: panelAuthed(req) }));
+
+  app.get('/api/panel/events', requirePanel, (req, res) => {
+    res.json({ events: store.listEvents(), openCreation: openCreation() });
+  });
+
+  app.post('/api/panel/settings', requirePanel, (req, res) => {
+    if ('openCreation' in (req.body || {})) store.setAppSetting('openCreation', Boolean(req.body.openCreation));
+    res.json({ openCreation: openCreation() });
+  });
+
+  app.post('/api/panel/events/:code/key', requirePanel, (req, res) => {
+    const ev = store.getEvent(req.params.code);
+    if (!ev) return res.status(404).json({ error: 'Evenimentul nu există.' });
+    res.json({ code: ev.code, adminKey: store.rotateAdminKey(ev) });
+  });
+
+  app.delete('/api/panel/events/:code', requirePanel, (req, res) => {
+    const ev = store.getEvent(req.params.code);
+    if (!ev) return res.status(404).json({ error: 'Evenimentul nu există.' });
+    store.deleteEvent(ev);
+    changed(ev.code);
+    res.json({ ok: true });
   });
 
   app.get('/qr/:code.svg', async (req, res) => {
@@ -154,7 +248,25 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     'poll:reveal': (ev, p) => store.revealQuiz(ev, p.id, p.revealed !== false),
     'poll:reset': (ev, p) => store.resetPoll(ev, p.id),
     'question:moderate': (ev, p) => store.moderate(ev, p.id, p.op),
+    'question:reply': (ev, p) => store.replyToQuestion(ev, p.id, p.text),
+    'test:create': (ev, p) => ({ id: store.createPoll(ev, p.poll, 'test') }),
+    'test:import': (ev, p) => ({ ids: store.createPolls(ev, p.polls, 'test') }),
   };
+
+  // Changing the code moves everyone who is connected: their rooms follow, and each page
+  // updates its own address bar.
+  function moveEvent(oldCode, newCode) {
+    const from = rooms(oldCode);
+    const to = rooms(newCode);
+    for (const s of io.sockets.sockets.values()) {
+      if (s.data?.code !== oldCode) continue;
+      s.data.code = newCode;
+      const role = s.data.role;
+      s.leave(from[role]);
+      s.join(to[role]);
+    }
+    io.to([to.audience, to.present, to.admin]).emit('moved', { from: oldCode, code: newCode });
+  }
 
   // Same rule as Express: with one trusted proxy, the client is the last X-Forwarded-For entry.
   const socketIp = (socket) => {
@@ -201,7 +313,8 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
       if (me().code) throw new UserError('Deja conectat.');
       if (!['admin', 'present', 'audience'].includes(role)) throw new UserError('Rol necunoscut.');
       if (limits.miss.blocked(ip)) throw new UserError('Prea multe încercări greșite. Încearcă peste câteva minute.');
-      const ev = role === 'admin' ? store.verifyAdmin(code, key) : store.getEvent(code);
+      const panel = role === 'admin' && Boolean(adminPassword) && sessionValid(cookieValue(socket.handshake.headers.cookie, 'quizy_panel'));
+      const ev = role === 'admin' ? (store.verifyAdmin(code, key) || (panel ? store.getEvent(code) : null)) : store.getEvent(code);
       if (!ev) {
         limits.miss.take(ip);
         throw new UserError(role === 'admin' ? 'Cheie de administrare invalidă.' : 'Evenimentul nu există.');
@@ -242,8 +355,22 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
       return { me: store.personalState(code, participantId) };
     });
 
+    on('certificate', ({ name }) => {
+      const { code, participantId } = requireAudience();
+      const cert = store.issueCertificate(code, participantId, name);
+      changed(code);
+      return { certificate: cert };
+    });
+
     on('admin', ({ action, ...payload }) => {
       if (me().role !== 'admin') throw new UserError('Acces interzis.');
+      if (action === 'event:code') {
+        const oldCode = me().code;
+        const code = store.changeCode(store.requireEvent(oldCode), payload.code);
+        if (code !== oldCode) moveEvent(oldCode, code);
+        changed(code);
+        return { code };
+      }
       const fn = adminActions[action];
       if (!fn) throw new UserError('Acțiune necunoscută.');
       const out = fn(store.requireEvent(me().code), payload);

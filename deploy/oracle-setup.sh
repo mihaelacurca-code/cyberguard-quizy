@@ -33,6 +33,14 @@ if [ -z "$DOMAIN" ]; then
 fi
 echo "$DOMAIN" > /etc/quizy/domain
 
+# Password for the organizer panel (/panel). Generated once, kept across updates.
+NEW_PASSWORD=""
+if ! grep -qs '^ADMIN_PASSWORD=' /etc/quizy/env; then
+  NEW_PASSWORD="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 20 || true)"
+  echo "ADMIN_PASSWORD=$NEW_PASSWORD" >> /etc/quizy/env
+fi
+chmod 600 /etc/quizy/env
+
 # ---------- packages ----------
 say "Instalez pachetele de sistem"
 export DEBIAN_FRONTEND=noninteractive
@@ -89,6 +97,7 @@ User=quizy
 WorkingDirectory=$APP_DIR
 Environment=NODE_ENV=production PORT=$PORT HOST=127.0.0.1 TRUST_PROXY=1
 Environment=DATABASE_FILE=$DATA_DIR/quizy.db PUBLIC_URL=https://$DOMAIN
+EnvironmentFile=/etc/quizy/env
 ExecStart=$(command -v node) --disable-warning=ExperimentalWarning server/index.js
 Restart=always
 RestartSec=2
@@ -159,6 +168,12 @@ done
 
 if [ -n "$ok" ]; then
   printf '\n\033[1;32mGata! Quizy rulează la: https://%s\033[0m\n\n' "$DOMAIN"
+  printf 'Panoul de administrare: https://%s/panel\n' "$DOMAIN"
+  if [ -n "$NEW_PASSWORD" ]; then
+    printf 'Parola panoului (salveaz-o acum): \033[1m%s\033[0m\n\n' "$NEW_PASSWORD"
+  else
+    printf 'Parola panoului o vezi cu: sudo cat /etc/quizy/env\n\n'
+  fi
 else
   cat <<EOF
 

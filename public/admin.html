@@ -36,6 +36,21 @@
         </div>
         <form id="editor" class="card stack hidden"></form>
         <div id="polls" style="margin-top:1rem"></div>
+
+        <div class="card stack" id="test-card" style="margin-top:1.5rem">
+          <div class="row between">
+            <h2 style="margin:0" data-i18n>Test înainte / după</h2>
+            <span id="test-status" class="badge"></span>
+          </div>
+          <p class="small muted" style="margin:0" data-i18n>Aceleași întrebări, la începutul și la finalul training-ului. Participanții răspund în ritmul lor, iar raportul arată cât au progresat.</p>
+          <div id="test-controls" class="row"></div>
+          <div id="test-report"></div>
+          <details id="test-questions-box">
+            <summary id="test-questions-summary"></summary>
+            <div id="test-questions" class="stack" style="margin-top:.5rem"></div>
+          </details>
+          <form id="test-import" class="stack"></form>
+        </div>
       </section>
 
       <section>
@@ -67,7 +82,28 @@
 
         <div class="card stack">
           <h2 data-i18n>🏆 Clasament quiz</h2>
+          <p class="small muted" style="margin:0" data-i18n>Fiecare răspuns corect la rând aduce +100 de puncte bonus (până la +500).</p>
           <div id="leaderboard"></div>
+        </div>
+
+        <div class="card stack">
+          <div class="row between">
+            <h2 style="margin:0" data-i18n>Certificate de participare</h2>
+            <span id="cert-count" class="badge"></span>
+          </div>
+          <label class="check"><input type="checkbox" id="cert-enabled"> <span data-i18n>Participanții își pot descărca certificatul</span></label>
+          <form id="cert-form" class="stack">
+            <div>
+              <label for="cert-issuer" data-i18n>Emis de (organizația ta)</label>
+              <input id="cert-issuer" type="text" maxlength="80" placeholder="ex. CYBERGUARD" data-i18n-placeholder>
+            </div>
+            <div>
+              <label for="cert-min" data-i18n>Scor minim la testul final (%, 0 = doar participare)</label>
+              <input id="cert-min" type="number" min="0" max="100">
+            </div>
+            <button type="submit" data-i18n>Salvează</button>
+          </form>
+          <p class="small muted" style="margin:0" data-i18n>Fiecare certificat are un cod și un QR prin care oricine îi poate verifica autenticitatea.</p>
         </div>
 
         <div class="card stack">
@@ -76,6 +112,11 @@
             <input id="rename-input" class="grow" type="text" maxlength="120" aria-label="Numele evenimentului" data-i18n-aria>
             <button type="submit" data-i18n>Redenumește</button>
           </form>
+          <form id="code-form" class="row">
+            <input id="code-input" class="grow code-field" type="text" maxlength="20" aria-label="Codul evenimentului" data-i18n-aria>
+            <button type="submit" data-i18n>Schimbă codul</button>
+          </form>
+          <p class="small muted" style="margin:0" data-i18n>Un cod scurt și ușor de reținut, de exemplu NIS2. Linkurile și codul QR se schimbă imediat.</p>
           <label class="check"><input type="checkbox" id="closed"> <span data-i18n>Eveniment închis (nu mai primește răspunsuri)</span></label>
           <button id="delete-event" class="danger" type="button" data-i18n>Șterge evenimentul definitiv</button>
         </div>

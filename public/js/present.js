@@ -1,4 +1,4 @@
-import { $, h, connect, codeFromPath, renderResults, timeLeft, votersLabel, TYPE_LABELS } from './common.js';
+import { $, h, connect, codeFromPath, renderResults, timeLeft, votersLabel, TYPE_LABELS, fill } from './common.js';
 import { t, translatePage, langSwitch } from './i18n.js';
 
 translatePage();
@@ -16,10 +16,10 @@ connect({
   code, role: 'present',
   onState: (s) => { state = s; skew = s.now - Date.now(); render(); },
   onError: (msg) => {
-    $('#main').replaceChildren();
+    fill($('#main'), );
     const err = $('#error');
     err.classList.remove('hidden');
-    err.replaceChildren(h('div', { class: 'card empty' }, h('h2', {}, msg)));
+    fill(err, h('div', { class: 'card empty' }, h('h2', {}, msg)));
   },
 });
 
@@ -49,7 +49,7 @@ function render() {
 
   if (screen === 'join') {
     main.style.gridTemplateColumns = '1fr';
-    main.replaceChildren(h('div', { class: 'join-full' },
+    fill(main, h('div', { class: 'join-full' },
       h('h1', {}, state.event.name),
       h('p', { class: 'muted', style: { fontSize: '1.5rem' } }, t('Intră pe {url} sau scanează codul', { url: `${location.host}/e/` })),
       h('div', { class: 'code join-box' }, h('span', { class: 'code' }, code)),
@@ -62,8 +62,16 @@ function render() {
   let content;
   if (screen === 'poll') content = pollView();
   else if (screen === 'qa') content = qaView();
-  else content = leaderboardView();
-  main.replaceChildren(h('section', {}, content), joinBox());
+  else if (screen === 'test') content = testView();
+  else {
+    // Rebuild the podium only when the scores move, so its entrance animation plays once.
+    const key = JSON.stringify(state.leaderboard);
+    if (key === lastBoard && main.querySelector('.podium-wrap')) return;
+    lastBoard = key;
+    content = leaderboardView();
+  }
+  if (screen !== 'leaderboard') lastBoard = '';
+  fill(main, h('section', {}, content), joinBox());
 }
 
 function pollView() {
@@ -107,18 +115,51 @@ function qaView() {
   return h('div', {},
     h('h1', {}, t('Întrebări din public')),
     top ? h('div', { class: 'card', style: { fontSize: '2rem', fontWeight: 700, borderColor: 'var(--primary)', marginBottom: '1.5rem' } },
-      top.text, h('div', { class: 'muted', style: { fontSize: '1rem', fontWeight: 400, marginTop: '.5rem' } }, `${top.author || t('Anonim')} · ▲ ${top.votes}`)) : null,
+      top.text, h('div', { class: 'muted', style: { fontSize: '1rem', fontWeight: 400, marginTop: '.5rem' } }, `${top.author || t('Anonim')} · ▲ ${top.votes}`),
+      top.reply ? h('div', { class: 'reply', style: { fontSize: '1.3rem', fontWeight: 400 } }, h('strong', {}, t('Răspunsul organizatorului:')), ' ', top.reply) : null) : null,
     rest.length || top ? rest.map((q) => h('div', { class: 'question' },
       h('div', { class: 'upvote btn' }, h('span', {}, '▲'), h('strong', {}, q.votes)),
       h('div', { class: 'body' }, q.text, h('div', { class: 'meta' }, q.author || t('Anonim')))))
       : h('p', { class: 'muted', style: { fontSize: '1.4rem' } }, t('Trimite întrebările tale de pe telefon.')));
 }
 
+let lastBoard = '';
+
 function leaderboardView() {
   const lb = state.leaderboard;
-  return h('div', {},
+  if (!lb.length) {
+    return h('div', {}, h('h1', {}, t('🏆 Clasament')),
+      h('p', { class: 'muted', style: { fontSize: '1.4rem' } }, t('Clasamentul apare după primul quiz.')));
+  }
+  const name = (r) => r.name || t('Anonim');
+  const flame = (r) => (r.streak >= 2 ? h('div', { class: 'flame' }, `🔥 ${r.streak}`) : null);
+  // Podium order: 2nd, 1st, 3rd, so the winner stands in the middle.
+  const steps = [lb[1], lb[0], lb[2]].map((r, i) => (r ? h('div', { class: `step step-${r.rank}`, style: { animationDelay: `${[0.4, 0.9, 0][i]}s` } },
+    h('div', { class: 'who' }, h('div', { class: 'medal' }, ['🥇', '🥈', '🥉'][r.rank - 1]), h('div', { class: 'pname' }, name(r)), h('div', { class: 'ppts' }, r.score), flame(r)),
+    h('div', { class: 'block' }, r.rank)) : h('div', { class: 'step empty' })));
+  return h('div', { class: 'podium-wrap' },
     h('h1', {}, t('🏆 Clasament')),
-    lb.length
-      ? h('ol', { class: 'leader', style: { fontSize: '1.6rem' } }, lb.map((r) => h('li', {}, h('span', {}, `${r.rank}. ${r.name || t('Anonim')}`), h('span', { class: 'pts' }, r.score))))
-      : h('p', { class: 'muted', style: { fontSize: '1.4rem' } }, t('Clasamentul apare după primul quiz.')));
+    h('div', { class: 'podium' }, steps),
+    lb.length > 3 ? h('ol', { class: 'leader rest', start: 4 }, lb.slice(3).map((r) => h('li', {}, h('span', {}, `${r.rank}. ${name(r)}`), h('span', { class: 'pts' }, r.streak >= 2 ? `🔥${r.streak} · ` : '', r.score)))) : null);
+}
+
+function testView() {
+  const r = state.test;
+  if (!r || !r.total) return h('div', {}, h('h1', {}, t('Test înainte / după')), h('p', { class: 'muted' }, t('Testul nu are încă întrebări.')));
+  const pct = (v) => (v === null || v === undefined ? '–' : `${v}%`);
+  const running = r.round ? h('p', { class: 'muted', style: { fontSize: '1.4rem' } },
+    t(r.round === 'pre' ? 'Testul inițial e deschis: {n} au răspuns până acum.' : 'Testul final e deschis: {n} au răspuns până acum.', { n: votersLabel(r.participants[r.round]) })) : null;
+  const delta = r.average.pre !== null && r.average.post !== null ? r.average.post - r.average.pre : null;
+  return h('div', {},
+    h('h1', {}, t('Ce am învățat')),
+    running,
+    h('div', { class: 'test-summary big' },
+      h('div', {}, h('div', { class: 'muted' }, t('Înainte')), h('div', { class: 'big-num' }, pct(r.average.pre))),
+      h('div', { class: 'arrow' }, '→'),
+      h('div', {}, h('div', { class: 'muted' }, t('După')), h('div', { class: 'big-num' }, pct(r.average.post))),
+      delta !== null ? h('div', { class: `gain ${delta >= 0 ? 'up' : 'down'}` }, `${delta >= 0 ? '+' : ''}${delta}`, h('div', { class: 'small' }, t('puncte procentuale'))) : null),
+    h('div', { class: 'bars test-bars' }, r.questions.slice(0, 8).map((q, i) => h('div', { class: 'test-q' },
+      h('div', { class: 'bar-label' }, h('span', {}, `${i + 1}. ${q.question}`), h('span', { class: 'n' }, `${pct(q.pre)} → ${pct(q.post)}`)),
+      h('div', { class: 'bar-track thin' }, h('div', { class: 'bar-fill pre', style: { width: `${q.pre || 0}%` } })),
+      h('div', { class: 'bar-track thin' }, h('div', { class: 'bar-fill', style: { width: `${q.post || 0}%` } }))))));
 }

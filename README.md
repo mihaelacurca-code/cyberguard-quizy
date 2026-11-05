@@ -20,6 +20,12 @@ Sondaje live, quiz-uri și întrebări din public pentru evenimente — o altern
 | **Q&A** | Întrebări din public (cu nume sau anonim), voturi, sortare populare/recente, moderare înainte de publicare, „pe ecran”, marcat ca răspuns, arhivare |
 | **Ecran de proiecție** | Cod de intrare + QR, rezultate live, întrebarea evidențiată, clasament; organizatorul alege ce se vede |
 | **Administrare** | Creare/editare/duplicare/reordonare sondaje, pornire/oprire, resetare, ascundere rezultate, închiderea evenimentului, export CSV |
+| **Test înainte / după** | Aceleași întrebări la începutul și la finalul training-ului, la care participanții răspund în ritmul lor. Raportul arată media înainte și după, progresul pe fiecare întrebare și câți participanți au progresat; se poate proiecta („Ce am învățat”) |
+| **Certificate de participare** | PDF cu numele participantului, evenimentul, data, scorul la testul final și emitentul. Opțional, un scor minim la testul final. Fiecare certificat are un cod și un QR de verificare (`/v/COD`) |
+| **Răspunsul organizatorului în Q&A** | Organizatorul scrie un răspuns care apare sub întrebare, pe telefoane și pe ecran |
+| **Cod personalizat** | Codul aleator poate fi înlocuit cu unul ușor de reținut (de ex. `NIS2`); cei conectați sunt mutați automat |
+| **Podium și serii** | Clasamentul pe ecran apare ca podium animat; fiecare răspuns corect la rând aduce +100 de puncte bonus (până la +500) |
+| **Panou de administrare** | La `/panel`, cu o parolă pe server: toate evenimentele, acces la oricare fără linkul de administrare, link nou de administrare, ștergere, și opțiunea ca doar administratorii să poată crea evenimente |
 
 Participanții nu își fac cont: intră cu un cod de 6 caractere sau scanează QR-ul. Organizatorul nu își face cont: primește un link secret de administrare.
 
@@ -105,6 +111,7 @@ npm test
 | `PUBLIC_URL` | adresa din cerere | Adresa publică folosită în codul QR (ex. `https://cyberguardquizy.com`) |
 | `HOST` | `0.0.0.0` | Interfața pe care ascultă (`127.0.0.1` în spatele unui reverse proxy) |
 | `TRUST_PROXY` | — | `1` când rulează în spatele unui reverse proxy (Nginx, Render, Fly) |
+| `ADMIN_PASSWORD` | — | Parola panoului de administrare (`/panel`). Fără ea, panoul e dezactivat. Scriptul de instalare o generează în `/etc/quizy/env` |
 
 ## Găzduire
 
@@ -128,7 +135,7 @@ Aplicația nu impune nicio limită; capacitatea depinde de server. Actualizăril
 
 Auditul complet, problemele corectate și riscurile rămase sunt în [`SECURITY.md`](SECURITY.md).
 
-- Linkul de administrare conține o cheie secretă aleatorie; serverul păstrează doar hash-ul ei. Cine are linkul controlează evenimentul.
+- Linkul de administrare conține o cheie secretă aleatorie; serverul păstrează doar hash-ul ei. Cine are linkul controlează evenimentul. Dacă linkul se pierde, din panoul de administrare se generează unul nou.
 - Participanții sunt anonimi și identificați printr-un ID aleator ținut în browser. Ca la orice sondaj fără cont, cineva care își golește browserul poate vota din nou.
 - Protecții anti-abuz, nu limite de utilizare: lungimea textelor, cel mult 5 întrebări Q&A pe minut per participant, limitarea ritmului acțiunilor per conexiune, limite generoase per IP (evenimente noi, conectări, întrebări) și blocare temporară după 60 de coduri sau chei greșite în 10 minute.
 - Exportul CSV neutralizează valorile care ar putea fi interpretate drept formule în Excel.

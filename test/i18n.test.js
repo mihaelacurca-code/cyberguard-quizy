@@ -43,15 +43,15 @@ test('every interface text has an English version', async () => {
   const { t } = await import('../public/js/i18n.js');
 
   const missing = new Set();
-  const ignore = new Set(['sm primary', 'sm', 'approve', 'archive', 'highlight', 'answer', 'restore', 'delete', 'Live', 'Quiz', 'Word cloud', 'participant', 'answer', 'Export CSV', 'online', 'Q&A', '● {n} online', 'closed', 'quiz', 'pending', 'live']);
+  const ignore = new Set(['sm primary', 'sm', 'approve', 'archive', 'highlight', 'answer', 'restore', 'delete', 'Live', 'Quiz', 'Word cloud', 'participant', 'answer', 'Export CSV', 'online', 'Q&A', '● {n} online', 'closed', 'quiz', 'pending', 'live', 'pre']);
   for (const f of readdirSync(new URL('../public/js/', import.meta.url))) {
     for (const s of translatedLiterals(read(`public/js/${f}`))) {
       if (!ignore.has(s) && t(s) === s) missing.add(`${f}: ${s}`);
     }
   }
-  for (const f of ['index.html', 'event.html', 'admin.html', 'present.html']) {
+  for (const f of ['index.html', 'event.html', 'admin.html', 'present.html', 'panel.html', 'verify.html']) {
     const html = read(`public/${f}`);
-    for (const m of html.matchAll(/<(\w+)[^>]*\sdata-i18n[\s>][^>]*>([^<]*)</g)) {
+    for (const m of html.matchAll(/<(\w+)[^>]*\sdata-i18n(?:\s[^>]*)?>([^<]*)</g)) {
       const s = m[2].trim().replace(/&amp;/g, '&');
       if (s && !ignore.has(s) && t(s) === s) missing.add(`${f}: ${s}`);
     }

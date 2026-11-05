@@ -6,7 +6,12 @@ export class UserError extends Error {}
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 export const POLL_TYPES = ['choice', 'quiz', 'wordcloud', 'open', 'rating'];
-const SCREENS = ['join', 'poll', 'qa', 'leaderboard'];
+const SCREENS = ['join', 'poll', 'qa', 'leaderboard', 'test'];
+const TEST_ROUNDS = ['pre', 'post'];
+const CERT_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+// Each correct answer in a row after the first adds this much, up to STREAK_CAP steps.
+export const STREAK_BONUS = 100;
+const STREAK_CAP = 5;
 
 export const LIMITS = {
   eventName: 120,
@@ -18,6 +23,8 @@ export const LIMITS = {
   qaText: 300,
   nickname: 40,
   maxEntries: 10,
+  reply: 1000,
+  issuer: 80,
 };
 
 const DEFAULT_SETTINGS = {
@@ -25,6 +32,10 @@ const DEFAULT_SETTINGS = {
   qaModeration: false,
   closed: false,
   screen: 'join',
+  testRound: null,
+  certEnabled: false,
+  certIssuer: '',
+  certMinScore: 0,
 };
 
 const now = () => Date.now();
@@ -61,36 +72,49 @@ export function createStore(db) {
     eventByCode: q('SELECT * FROM events WHERE code = ?'),
     insertEvent: q('INSERT INTO events (code, name, admin_hash, settings, created_at) VALUES (?, ?, ?, ?, ?)'),
     updateEvent: q('UPDATE events SET name = ?, settings = ? WHERE id = ?'),
+    setCode: q('UPDATE events SET code = ? WHERE id = ?'),
+    setAdminHash: q('UPDATE events SET admin_hash = ? WHERE id = ?'),
+    allEvents: q(`SELECT e.*,
+                    (SELECT COUNT(*) FROM polls p WHERE p.event_id = e.id AND p.kind = '') AS polls,
+                    (SELECT COUNT(DISTINCT participant_id) FROM (
+                       SELECT v.participant_id FROM votes v JOIN polls p ON p.id = v.poll_id WHERE p.event_id = e.id
+                       UNION SELECT participant_id FROM questions WHERE event_id = e.id)) AS participants
+                  FROM events e ORDER BY e.created_at DESC`),
     deleteEvent: q('DELETE FROM events WHERE id = ?'),
 
-    polls: q('SELECT * FROM polls WHERE event_id = ? ORDER BY position, id'),
+    polls: q("SELECT * FROM polls WHERE event_id = ? AND kind = '' ORDER BY position, id"),
+    testPolls: q("SELECT * FROM polls WHERE event_id = ? AND kind = 'test' ORDER BY position, id"),
     poll: q('SELECT * FROM polls WHERE id = ? AND event_id = ?'),
-    livePoll: q("SELECT * FROM polls WHERE event_id = ? AND status = 'live' LIMIT 1"),
-    maxPos: q('SELECT COALESCE(MAX(position), -1) AS m FROM polls WHERE event_id = ?'),
-    insertPoll: q(`INSERT INTO polls (event_id, type, question, config, show_results, position, created_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?)`),
+    livePoll: q("SELECT * FROM polls WHERE event_id = ? AND kind = '' AND status = 'live' LIMIT 1"),
+    maxPos: q('SELECT COALESCE(MAX(position), -1) AS m FROM polls WHERE event_id = ? AND kind = ?'),
+    insertPoll: q(`INSERT INTO polls (event_id, type, question, config, show_results, position, created_at, kind)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
     updatePoll: q('UPDATE polls SET type = ?, question = ?, config = ?, show_results = ? WHERE id = ?'),
     setStatus: q('UPDATE polls SET status = ?, opened_at = ? WHERE id = ?'),
-    closeLive: q("UPDATE polls SET status = 'closed' WHERE event_id = ? AND status = 'live'"),
+    closeLive: q("UPDATE polls SET status = 'closed' WHERE event_id = ? AND kind = '' AND status = 'live'"),
     setShow: q('UPDATE polls SET show_results = ? WHERE id = ?'),
     setRevealed: q('UPDATE polls SET revealed = ? WHERE id = ?'),
     setPos: q('UPDATE polls SET position = ? WHERE id = ?'),
     deletePoll: q('DELETE FROM polls WHERE id = ?'),
 
     votesByPoll: q('SELECT * FROM votes WHERE poll_id = ? ORDER BY id'),
-    votesOf: q('SELECT * FROM votes WHERE poll_id = ? AND participant_id = ? ORDER BY id'),
-    votesOfInEvent: q(`SELECT v.poll_id, v.value FROM votes v JOIN polls p ON p.id = v.poll_id
+    votesOf: q("SELECT * FROM votes WHERE poll_id = ? AND participant_id = ? AND round = ? ORDER BY id"),
+    votesOfInEvent: q(`SELECT v.poll_id, v.value, v.round FROM votes v JOIN polls p ON p.id = v.poll_id
                        WHERE p.event_id = ? AND v.participant_id = ? ORDER BY v.id`),
-    insertVote: q('INSERT INTO votes (poll_id, participant_id, name, value, score, created_at) VALUES (?, ?, ?, ?, ?, ?)'),
-    deleteVotesOf: q('DELETE FROM votes WHERE poll_id = ? AND participant_id = ?'),
+    insertVote: q('INSERT INTO votes (poll_id, participant_id, name, value, score, created_at, round) VALUES (?, ?, ?, ?, ?, ?, ?)'),
+    deleteVotesOf: q("DELETE FROM votes WHERE poll_id = ? AND participant_id = ? AND round = ''"),
+    testVotes: q(`SELECT v.poll_id, v.participant_id, v.name, v.score, v.round FROM votes v JOIN polls p ON p.id = v.poll_id
+                  WHERE p.event_id = ? AND p.kind = 'test'`),
+    testVotesOf: q(`SELECT v.score FROM votes v JOIN polls p ON p.id = v.poll_id
+                    WHERE p.event_id = ? AND p.kind = 'test' AND v.participant_id = ? AND v.round = ?`),
+    hasActivity: q(`SELECT 1 FROM votes v JOIN polls p ON p.id = v.poll_id WHERE p.event_id = ? AND v.participant_id = ?
+                    UNION SELECT 1 FROM questions WHERE event_id = ? AND participant_id = ? LIMIT 1`),
     deleteVotes: q('DELETE FROM votes WHERE poll_id = ?'),
     voterCount: q('SELECT COUNT(DISTINCT participant_id) AS n FROM votes WHERE poll_id = ?'),
-    leaderboard: q(`SELECT v.participant_id, MAX(v.name) AS name, SUM(v.score) AS score,
-                           SUM(CASE WHEN v.score > 0 THEN 1 ELSE 0 END) AS correct
-                    FROM votes v JOIN polls p ON p.id = v.poll_id
-                    WHERE p.event_id = ? AND p.type = 'quiz' AND p.revealed = 1
-                    GROUP BY v.participant_id
-                    ORDER BY score DESC, MIN(v.created_at) ASC`),
+    revealedQuizzes: q(`SELECT id FROM polls WHERE event_id = ? AND kind = '' AND type = 'quiz' AND revealed = 1
+                        ORDER BY COALESCE(opened_at, created_at), id`),
+    quizVotes: q(`SELECT v.poll_id, v.participant_id, v.name, v.score, v.created_at FROM votes v JOIN polls p ON p.id = v.poll_id
+                  WHERE p.event_id = ? AND p.kind = '' AND p.type = 'quiz' AND p.revealed = 1`),
 
     questions: q(`SELECT qu.*, (SELECT COUNT(*) FROM upvotes u WHERE u.question_id = qu.id) AS votes
                   FROM questions qu WHERE qu.event_id = ?`),
@@ -98,6 +122,7 @@ export function createStore(db) {
     insertQuestion: q(`INSERT INTO questions (event_id, participant_id, author, text, status, created_at)
                        VALUES (?, ?, ?, ?, ?, ?)`),
     setQuestion: q('UPDATE questions SET status = ?, highlighted = ? WHERE id = ?'),
+    setReply: q('UPDATE questions SET reply = ?, replied_at = ? WHERE id = ?'),
     clearHighlight: q('UPDATE questions SET highlighted = 0 WHERE event_id = ?'),
     deleteQuestion: q('DELETE FROM questions WHERE id = ?'),
     upvote: q('INSERT OR IGNORE INTO upvotes (question_id, participant_id) VALUES (?, ?)'),
@@ -106,6 +131,14 @@ export function createStore(db) {
     upvotesOf: q(`SELECT u.question_id FROM upvotes u JOIN questions qu ON qu.id = u.question_id
                   WHERE qu.event_id = ? AND u.participant_id = ?`),
     recentQuestionsOf: q('SELECT COUNT(*) AS n FROM questions WHERE event_id = ? AND participant_id = ? AND created_at > ?'),
+
+    certOf: q('SELECT * FROM certificates WHERE event_id = ? AND participant_id = ?'),
+    cert: q('SELECT c.*, e.name AS event_name, e.settings AS event_settings FROM certificates c JOIN events e ON e.id = c.event_id WHERE c.id = ?'),
+    insertCert: q('INSERT INTO certificates (id, event_id, participant_id, name, score, issued_at) VALUES (?, ?, ?, ?, ?, ?)'),
+    certCount: q('SELECT COUNT(*) AS n FROM certificates WHERE event_id = ?'),
+
+    getSetting: q('SELECT value FROM app_settings WHERE key = ?'),
+    putSetting: q('INSERT INTO app_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value'),
   };
 
   function tx(fn) {
@@ -161,8 +194,15 @@ export function createStore(db) {
 
   function updateEvent(ev, { name, settings = {} }) {
     const next = { ...ev.settings };
-    for (const k of ['qaEnabled', 'qaModeration', 'closed']) {
+    for (const k of ['qaEnabled', 'qaModeration', 'closed', 'certEnabled']) {
       if (k in settings) next[k] = Boolean(settings[k]);
+    }
+    if ('certIssuer' in settings) next.certIssuer = text(settings.certIssuer, LIMITS.issuer, 'Emitentul', { required: false });
+    if ('certMinScore' in settings) next.certMinScore = int(settings.certMinScore, 0, 100, 0);
+    if ('testRound' in settings) {
+      if (settings.testRound !== null && !TEST_ROUNDS.includes(settings.testRound)) throw new UserError('Etapă de test necunoscută.');
+      if (settings.testRound && !st.testPolls.all(ev.id).length) throw new UserError('Adaugă întâi întrebări în test.');
+      next.testRound = settings.testRound;
     }
     if ('screen' in settings) {
       if (!SCREENS.includes(settings.screen)) throw new UserError('Ecran necunoscut.');
@@ -178,6 +218,42 @@ export function createStore(db) {
 
   function deleteEvent(ev) {
     st.deleteEvent.run(ev.id);
+  }
+
+  // Organizers can swap the random code for a memorable one (e.g. NIS2). Short codes are
+  // easier to guess, which only matters for who can join: the admin key is separate.
+  function changeCode(ev, raw) {
+    const code = typeof raw === 'string' ? raw.trim().toUpperCase() : '';
+    if (!/^[A-Z0-9]{3,20}$/.test(code)) throw new UserError('Codul trebuie să aibă 3–20 litere sau cifre, fără spații.');
+    if (code === ev.code) return code;
+    if (st.eventByCode.get(code)) throw new UserError('Codul este deja folosit de alt eveniment.');
+    st.setCode.run(code, ev.id);
+    return code;
+  }
+
+  function rotateAdminKey(ev) {
+    const adminKey = randomBytes(18).toString('base64url');
+    st.setAdminHash.run(hash(adminKey), ev.id);
+    return adminKey;
+  }
+
+  function listEvents() {
+    return st.allEvents.all().map((e) => {
+      const settings = { ...DEFAULT_SETTINGS, ...JSON.parse(e.settings) };
+      return {
+        code: e.code, name: e.name, createdAt: e.created_at, polls: e.polls,
+        participants: e.participants, closed: settings.closed, certificates: st.certCount.get(e.id).n,
+      };
+    });
+  }
+
+  function appSetting(key, fallback) {
+    const row = st.getSetting.get(key);
+    return row ? JSON.parse(row.value) : fallback;
+  }
+
+  function setAppSetting(key, value) {
+    st.putSetting.run(key, JSON.stringify(value));
   }
 
   // ---------- polls ----------
@@ -222,25 +298,33 @@ export function createStore(db) {
     return { type, question, config, showResults };
   }
 
-  function createPoll(ev, data) {
-    const p = cleanPoll(data);
-    const pos = st.maxPos.get(ev.id).m + 1;
-    const r = st.insertPoll.run(ev.id, p.type, p.question, JSON.stringify(p.config), p.showResults ? 1 : 0, pos, now());
+  // Test questions (kind 'test') are always quizzes without a timer; they are answered at the
+  // participant's own pace in a "before" and an "after" round.
+  function cleanFor(kind, data) {
+    if (kind !== 'test') return cleanPoll(data);
+    if (data?.type && data.type !== 'quiz') throw new UserError('Testul acceptă doar întrebări cu răspuns corect.');
+    return cleanPoll({ ...data, type: 'quiz', timeLimit: 0 });
+  }
+
+  function createPoll(ev, data, kind = '') {
+    const p = cleanFor(kind, data);
+    const pos = st.maxPos.get(ev.id, kind).m + 1;
+    const r = st.insertPoll.run(ev.id, p.type, p.question, JSON.stringify(p.config), p.showResults ? 1 : 0, pos, now(), kind);
     return Number(r.lastInsertRowid);
   }
 
-  function createPolls(ev, list) {
+  function createPolls(ev, list, kind = '') {
     if (!Array.isArray(list) || !list.length) throw new UserError('Nu am găsit nicio întrebare de importat.');
     // Validate everything first so a typo in question 12 doesn't leave 11 half-imported.
     list.forEach((data, i) => {
-      try { cleanPoll(data); } catch (e) { throw new UserError(`Întrebarea ${i + 1}: ${e.message}`); }
+      try { cleanFor(kind, data); } catch (e) { throw new UserError(`Întrebarea ${i + 1}: ${e.message}`); }
     });
-    return tx(() => list.map((data) => createPoll(ev, data)));
+    return tx(() => list.map((data) => createPoll(ev, data, kind)));
   }
 
   function updatePoll(ev, pollId, data) {
     const existing = requirePoll(ev, pollId);
-    const p = cleanPoll(data);
+    const p = cleanFor(existing.kind, data);
     const hasVotes = st.voterCount.get(existing.id).n > 0;
     if (hasVotes && (p.type !== existing.type || optionsChanged(existing, p))) {
       throw new UserError('Sondajul are deja răspunsuri. Resetează-l înainte să schimbi tipul sau opțiunile.');
@@ -258,7 +342,7 @@ export function createStore(db) {
     const p = requirePoll(ev, pollId);
     return createPoll(ev, {
       type: p.type, question: p.question, ...p.config, showResults: p.show_results,
-    });
+    }, p.kind);
   }
 
   function deletePoll(ev, pollId) {
@@ -266,7 +350,8 @@ export function createStore(db) {
   }
 
   function movePoll(ev, pollId, direction) {
-    const list = st.polls.all(ev.id);
+    const kind = requirePoll(ev, pollId).kind;
+    const list = (kind === 'test' ? st.testPolls : st.polls).all(ev.id);
     const i = list.findIndex((p) => p.id === Number(pollId));
     if (i < 0) throw new UserError('Sondajul nu există.');
     const j = direction === 'up' ? i - 1 : i + 1;
@@ -278,6 +363,7 @@ export function createStore(db) {
   function setPollStatus(ev, pollId, status) {
     const p = requirePoll(ev, pollId);
     if (!['draft', 'live', 'closed'].includes(status)) throw new UserError('Stare necunoscută.');
+    if (p.kind === 'test') throw new UserError('Întrebările de test se deschid împreună, din secțiunea Test.');
     tx(() => {
       if (status === 'live') {
         st.closeLive.run(ev.id);
@@ -295,7 +381,7 @@ export function createStore(db) {
 
   function revealQuiz(ev, pollId, revealed = true) {
     const p = requirePoll(ev, pollId);
-    if (p.type !== 'quiz') throw new UserError('Doar quiz-urile au răspuns corect.');
+    if (p.type !== 'quiz' || p.kind === 'test') throw new UserError('Doar quiz-urile au răspuns corect.');
     // The quiz stays on screen so everyone sees whether they got it right; vote() refuses revealed quizzes.
     st.setRevealed.run(revealed ? 1 : 0, p.id);
   }
@@ -333,10 +419,19 @@ export function createStore(db) {
     if (ev.settings.closed) throw new UserError('Evenimentul este închis.');
     const pid = participant(participantId);
     const p = requirePoll(ev, pollId);
-    if (p.status !== 'live') throw new UserError('Sondajul nu mai primește răspunsuri.');
     const at = now();
     const nick = nickname(name);
-    const existing = st.votesOf.all(p.id, pid);
+    if (p.kind === 'test') {
+      const round = ev.settings.testRound;
+      if (!round) throw new UserError('Testul nu este deschis acum.');
+      if (st.votesOf.all(p.id, pid, round).length) throw new UserError('Ai răspuns deja.');
+      const pick = Number(Array.isArray(raw) ? raw[0] : raw);
+      if (!Number.isInteger(pick) || pick < 0 || pick >= p.config.options.length) throw new UserError('Alege o opțiune.');
+      st.insertVote.run(p.id, pid, nick, JSON.stringify([pick]), p.config.correct.includes(pick) ? 1 : 0, at, round);
+      return;
+    }
+    if (p.status !== 'live') throw new UserError('Sondajul nu mai primește răspunsuri.');
+    const existing = st.votesOf.all(p.id, pid, '');
 
     switch (p.type) {
       case 'choice': {
@@ -346,7 +441,7 @@ export function createStore(db) {
         if (!p.config.multi && picks.length > 1) throw new UserError('Poți alege o singură opțiune.');
         tx(() => {
           st.deleteVotesOf.run(p.id, pid);
-          st.insertVote.run(p.id, pid, nick, JSON.stringify(picks.sort((a, b) => a - b)), 0, at);
+          st.insertVote.run(p.id, pid, nick, JSON.stringify(picks.sort((a, b) => a - b)), 0, at, '');
         });
         break;
       }
@@ -358,7 +453,7 @@ export function createStore(db) {
         if (p.config.timeLimit > 0 && at > p.opened_at + p.config.timeLimit * 1000 + 1500) {
           throw new UserError('Timpul a expirat.');
         }
-        st.insertVote.run(p.id, pid, nick, JSON.stringify([pick]), quizScore(p, [pick], at), at);
+        st.insertVote.run(p.id, pid, nick, JSON.stringify([pick]), quizScore(p, [pick], at), at, '');
         break;
       }
       case 'rating': {
@@ -366,7 +461,7 @@ export function createStore(db) {
         if (!Number.isInteger(n) || n < 1 || n > p.config.scale) throw new UserError('Notă invalidă.');
         tx(() => {
           st.deleteVotesOf.run(p.id, pid);
-          st.insertVote.run(p.id, pid, nick, JSON.stringify([n]), 0, at);
+          st.insertVote.run(p.id, pid, nick, JSON.stringify([n]), 0, at, '');
         });
         break;
       }
@@ -377,7 +472,7 @@ export function createStore(db) {
         if (existing.length >= p.config.maxEntries) {
           throw new UserError(p.config.maxEntries === 1 ? 'Ai răspuns deja.' : `Poți trimite cel mult ${p.config.maxEntries} răspunsuri.`);
         }
-        st.insertVote.run(p.id, pid, nick, JSON.stringify([s]), 0, at);
+        st.insertVote.run(p.id, pid, nick, JSON.stringify([s]), 0, at, '');
         break;
       }
     }
@@ -425,10 +520,118 @@ export function createStore(db) {
     return out;
   }
 
+  // Points per revealed quiz, in the order the quizzes were run, plus a bonus for each correct
+  // answer in a row. Skipping a quiz or answering wrong resets the streak.
   function leaderboard(ev, limit = 50) {
-    return st.leaderboard.all(ev.id).slice(0, limit).map((r, i) => ({
-      rank: i + 1, name: r.name || '', score: r.score, correct: r.correct, id: r.participant_id,
-    }));
+    const order = st.revealedQuizzes.all(ev.id).map((r) => r.id);
+    const players = new Map();
+    for (const v of st.quizVotes.all(ev.id)) {
+      const pl = players.get(v.participant_id) || { id: v.participant_id, name: '', answers: new Map(), first: Infinity };
+      if (v.name) pl.name = v.name;
+      pl.answers.set(v.poll_id, v.score);
+      pl.first = Math.min(pl.first, v.created_at);
+      players.set(v.participant_id, pl);
+    }
+    const rows = [...players.values()].map((pl) => {
+      let score = 0; let correct = 0; let streak = 0; let best = 0; let bonus = 0;
+      for (const id of order) {
+        const s = pl.answers.get(id);
+        if (s > 0) {
+          streak++;
+          correct++;
+          const b = Math.min(streak - 1, STREAK_CAP) * STREAK_BONUS;
+          bonus += b;
+          score += s + b;
+          best = Math.max(best, streak);
+        } else {
+          streak = 0;
+        }
+      }
+      return { id: pl.id, name: pl.name, score, correct, streak, best, bonus, first: pl.first };
+    });
+    rows.sort((a, b) => (b.score - a.score) || (a.first - b.first));
+    return rows.slice(0, limit).map(({ first, ...r }, i) => ({ rank: i + 1, ...r }));
+  }
+
+  // ---------- knowledge test (before / after) ----------
+
+  function testReport(ev) {
+    const qs = st.testPolls.all(ev.id).map(hydratePoll);
+    const total = qs.length;
+    const rounds = { pre: new Map(), post: new Map() };
+    const perQuestion = new Map(qs.map((p) => [p.id, { pre: [0, 0], post: [0, 0] }]));
+    for (const v of st.testVotes.all(ev.id)) {
+      if (!rounds[v.round] || !perQuestion.has(v.poll_id)) continue;
+      const pq = perQuestion.get(v.poll_id)[v.round];
+      pq[1]++;
+      if (v.score > 0) pq[0]++;
+      const r = rounds[v.round].get(v.participant_id) || { correct: 0, answered: 0, name: '' };
+      r.answered++;
+      if (v.score > 0) r.correct++;
+      if (v.name) r.name = v.name;
+      rounds[v.round].set(v.participant_id, r);
+    }
+    const pct = (a, b) => (b ? Math.round((a / b) * 100) : null);
+    const avg = (m) => (m.size ? Math.round([...m.values()].reduce((s, r) => s + (r.correct / total) * 100, 0) / m.size) : null);
+    let improved = 0; let same = 0; let worse = 0; let gainSum = 0; let both = 0;
+    for (const [pid, post] of rounds.post) {
+      const pre = rounds.pre.get(pid);
+      if (!pre) continue;
+      both++;
+      const gain = ((post.correct - pre.correct) / total) * 100;
+      gainSum += gain;
+      if (gain > 0) improved++; else if (gain < 0) worse++; else same++;
+    }
+    return {
+      total,
+      round: ev.settings.testRound,
+      questions: qs.map((p) => {
+        const r = perQuestion.get(p.id);
+        return { id: p.id, question: p.question, pre: pct(...r.pre), post: pct(...r.post), answersPre: r.pre[1], answersPost: r.post[1] };
+      }),
+      participants: { pre: rounds.pre.size, post: rounds.post.size, both },
+      average: { pre: avg(rounds.pre), post: avg(rounds.post) },
+      matched: { improved, same, worse, gain: both ? Math.round(gainSum / both) : null },
+    };
+  }
+
+  function testScoreOf(ev, pid, round) {
+    const total = st.testPolls.all(ev.id).length;
+    let correct = 0; let answered = 0;
+    for (const v of st.testVotesOf.all(ev.id, pid, round)) { answered++; if (v.score > 0) correct++; }
+    return answered ? { correct, total, percent: total ? Math.round((correct / total) * 100) : 0 } : null;
+  }
+
+  // ---------- certificates ----------
+
+  function issueCertificate(code, participantId, name) {
+    const ev = requireEvent(code);
+    const pid = participant(participantId);
+    if (!ev.settings.certEnabled) throw new UserError('Certificatele nu sunt activate pentru acest eveniment.');
+    const existing = st.certOf.get(ev.id, pid);
+    if (existing) return certificateView(existing.id);
+    const clean = nickname(name);
+    if (clean.length < 3) throw new UserError('Scrie-ți numele complet pentru certificat.');
+    if (!st.hasActivity.get(ev.id, pid, ev.id, pid)) throw new UserError('Răspunde întâi la cel puțin o activitate din eveniment.');
+    const hasTest = st.testPolls.all(ev.id).length > 0;
+    const post = hasTest ? testScoreOf(ev, pid, 'post') : null;
+    if (ev.settings.certMinScore > 0 && hasTest && (!post || post.percent < ev.settings.certMinScore)) {
+      throw new UserError(`Certificatul cere cel puțin ${ev.settings.certMinScore}% la testul final.`);
+    }
+    let id = '';
+    do {
+      id = '';
+      for (let i = 0; i < 10; i++) id += CERT_ALPHABET[randomInt(CERT_ALPHABET.length)];
+    } while (st.cert.get(id));
+    st.insertCert.run(id, ev.id, pid, clean, post ? post.percent : null, now());
+    return certificateView(id);
+  }
+
+  function certificateView(id) {
+    const row = typeof id === 'string' ? st.cert.get(id.trim().toUpperCase()) : null;
+    if (!row) return null;
+    const settings = { ...DEFAULT_SETTINGS, ...JSON.parse(row.event_settings) };
+    return { id: row.id, name: row.name, event: row.event_name, score: row.score, issuedAt: row.issued_at, issuer: settings.certIssuer };
   }
 
   // ---------- Q&A ----------
@@ -480,10 +683,18 @@ export function createStore(db) {
     }
   }
 
+  function replyToQuestion(ev, questionId, body) {
+    const qu = st.question.get(Number(questionId), ev.id);
+    if (!qu) throw new UserError('Întrebarea nu există.');
+    const s = typeof body === 'string' ? body.trim() : '';
+    if (s.length > LIMITS.reply) throw new UserError(`Răspunsul poate avea cel mult ${LIMITS.reply} caractere.`);
+    st.setReply.run(s, s ? now() : null, qu.id);
+  }
+
   function questions(ev) {
     return st.questions.all(ev.id).map((qu) => ({
       id: qu.id, text: qu.text, author: qu.author, status: qu.status,
-      highlighted: !!qu.highlighted, votes: qu.votes, at: qu.created_at,
+      highlighted: !!qu.highlighted, votes: qu.votes, at: qu.created_at, reply: qu.reply || '',
     }));
   }
 
@@ -506,11 +717,14 @@ export function createStore(db) {
   function audienceState(ev) {
     const live = hydratePoll(st.livePoll.get(ev.id));
     const visible = sortQuestions(questions(ev).filter((x) => x.status === 'visible' || x.status === 'answered')).slice(0, 500);
+    const round = ev.settings.testRound;
     return {
       event: { code: ev.code, name: ev.name, settings: ev.settings },
       poll: live ? publicPoll(live, { withResults: live.show_results || live.revealed }) : null,
       questions: visible,
       leaderboard: ev.settings.screen === 'leaderboard' ? leaderboard(ev, 10).map(({ id, ...r }) => r) : null,
+      // Test questions go out without the correct answers.
+      test: round ? { round, questions: st.testPolls.all(ev.id).map(hydratePoll).map((p) => ({ id: p.id, question: p.question, options: p.config.options })) } : null,
     };
   }
 
@@ -536,6 +750,7 @@ export function createStore(db) {
       poll: shown ? presenterPoll(shown) : null,
       questions: visible,
       leaderboard: leaderboard(ev, 10).map(({ id, ...r }) => r),
+      test: ev.settings.screen === 'test' || ev.settings.testRound ? testReport(ev) : null,
     };
   }
 
@@ -548,6 +763,11 @@ export function createStore(db) {
       })),
       questions: sortQuestions(questions(ev)),
       leaderboard: leaderboard(ev, 50).map(({ id, ...r }) => r),
+      testQuestions: st.testPolls.all(ev.id).map(hydratePoll).map((p) => ({
+        id: p.id, question: p.question, options: p.config.options, correct: p.config.correct,
+      })),
+      test: testReport(ev),
+      certificates: st.certCount.get(ev.id).n,
     };
   }
 
@@ -555,15 +775,26 @@ export function createStore(db) {
     const ev = requireEvent(code);
     const pid = participant(participantId);
     const votes = {};
+    const test = { pre: {}, post: {} };
     for (const v of st.votesOfInEvent.all(ev.id, pid)) {
-      (votes[v.poll_id] ||= []).push(...JSON.parse(v.value));
+      if (v.round) test[v.round][v.poll_id] = JSON.parse(v.value)[0];
+      else (votes[v.poll_id] ||= []).push(...JSON.parse(v.value));
     }
     const board = leaderboard(ev, Infinity);
     const mine = board.find((r) => r.id === pid);
+    // A round's score is shown once that round is closed, so it can't be used to fix answers.
+    const open = ev.settings.testRound;
+    const cert = st.certOf.get(ev.id, pid);
     return {
       votes,
       upvotes: st.upvotesOf.all(ev.id, pid).map((r) => r.question_id),
-      score: mine ? { rank: mine.rank, score: mine.score, correct: mine.correct, of: board.length } : null,
+      score: mine ? { rank: mine.rank, score: mine.score, correct: mine.correct, of: board.length, streak: mine.streak, best: mine.best } : null,
+      test,
+      testScore: {
+        pre: open === 'pre' ? null : testScoreOf(ev, pid, 'pre'),
+        post: open === 'post' ? null : testScoreOf(ev, pid, 'post'),
+      },
+      certificate: cert ? cert.id : null,
     };
   }
 
@@ -572,11 +803,12 @@ export function createStore(db) {
     const rows = [en
       ? ['type', 'question', 'participant', 'name', 'answer', 'score', 'time']
       : ['tip', 'întrebare', 'participant', 'nume', 'răspuns', 'punctaj', 'moment']];
-    for (const p of st.polls.all(ev.id).map(hydratePoll)) {
+    for (const p of [...st.polls.all(ev.id), ...st.testPolls.all(ev.id)].map(hydratePoll)) {
       for (const v of st.votesByPoll.all(p.id)) {
         const value = JSON.parse(v.value);
         const answer = (p.type === 'choice' || p.type === 'quiz') ? value.map((i) => p.config.options[i]).join(' | ') : value.join(' | ');
-        rows.push([p.type, p.question, v.participant_id.slice(0, 8), v.name, answer, p.type === 'quiz' ? v.score : '', new Date(v.created_at).toISOString()]);
+        const type = p.kind === 'test' ? `test-${v.round}` : p.type;
+        rows.push([type, p.question, v.participant_id.slice(0, 8), v.name, answer, p.type === 'quiz' ? v.score : '', new Date(v.created_at).toISOString()]);
       }
     }
     for (const qu of questions(ev)) {
@@ -586,7 +818,8 @@ export function createStore(db) {
   }
 
   return {
-    createEvent, getEvent, requireEvent, verifyAdmin, updateEvent, deleteEvent,
+    createEvent, getEvent, requireEvent, verifyAdmin, updateEvent, deleteEvent, changeCode, rotateAdminKey, listEvents,
+    appSetting, setAppSetting, testReport, issueCertificate, certificateView, replyToQuestion,
     createPoll, createPolls, updatePoll, duplicatePoll, deletePoll, movePoll, setPollStatus, setShowResults, revealQuiz, resetPoll,
     vote, results, leaderboard,
     ask, toggleUpvote, moderate,

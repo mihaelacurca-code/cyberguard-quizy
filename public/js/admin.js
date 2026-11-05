@@ -3,7 +3,7 @@ import { t as tr, lang, translatePage, langSwitch } from './i18n.js';
 
 translatePage();
 $('#lang-slot').replaceWith(langSwitch());
-import { $, h, toast, storage, store, connect, codeFromPath, renderResults, TYPE_LABELS, votersLabel, copy } from './common.js';
+import { $, h, toast, storage, store, connect, codeFromPath, renderResults, TYPE_LABELS, votersLabel, copy, fill } from './common.js';
 
 const code = codeFromPath();
 const hashKey = new URLSearchParams(location.hash.slice(1)).get('key');
@@ -13,26 +13,27 @@ let state = null;
 let qaFilter = 'visible';
 const openDetails = new Set();
 
-if (!key) {
-  showError(tr('Lipsește cheia de administrare. Deschide linkul de administrare primit la crearea evenimentului.'));
-} else {
-  if (hashKey && !saved.some((e) => e.code === code)) {
-    saved.unshift({ code, key, name: code, at: Date.now() });
-    store('quizy:events', saved.slice(0, 50));
-  }
-  // Keep the secret out of the address bar: organizers often project or share their screen.
-  // The key stays in this browser's storage and in the masked link under „Linkuri”.
-  if (hashKey) history.replaceState(null, '', location.pathname);
+if (key && hashKey && !saved.some((e) => e.code === code)) {
+  saved.unshift({ code, key, name: code, at: Date.now() });
+  store('quizy:events', saved.slice(0, 50));
 }
+// Keep the secret out of the address bar: organizers often project or share their screen.
+// The key stays in this browser's storage and in the masked link under „Linkuri”.
+if (hashKey) history.replaceState(null, '', location.pathname);
 
 function showError(msg) {
   $('#app').classList.add('hidden');
   const err = $('#error');
   err.classList.remove('hidden');
-  err.replaceChildren(h('h2', {}, msg), h('a', { class: 'btn', href: '/' }, tr('Pagina principală')));
+  fill(err, 
+    h('h2', {}, key ? msg : tr('Lipsește cheia de administrare. Deschide linkul de administrare primit la crearea evenimentului.')),
+    h('div', { class: 'row' },
+      h('a', { class: 'btn', href: '/' }, tr('Pagina principală')),
+      h('a', { class: 'btn', href: '/panel' }, tr('Panoul de administrare'))));
 }
 
-const socket = key && connect({
+// Without a key the server may still let us in through a panel login (cookie).
+const socket = connect({
   code, role: 'admin', key,
   onState: (s) => { state = s; render(); },
   onError: showError,
@@ -59,6 +60,13 @@ function render() {
   $('#qa-enabled').checked = ev.settings.qaEnabled;
   $('#qa-moderation').checked = ev.settings.qaModeration;
   $('#closed').checked = ev.settings.closed;
+  if (document.activeElement !== $('#code-input')) $('#code-input').value = ev.code;
+  $('#cert-enabled').checked = ev.settings.certEnabled;
+  if (!$('#cert-form').contains(document.activeElement)) {
+    $('#cert-issuer').value = ev.settings.certIssuer || '';
+    $('#cert-min').value = ev.settings.certMinScore || 0;
+  }
+  $('#cert-count').textContent = tr('{n} emise', { n: state.certificates });
 
   const mine = storage('quizy:events', []);
   const entry = mine.find((e) => e.code === ev.code);
@@ -69,11 +77,12 @@ function render() {
   renderPolls();
   renderQuestions();
   renderLeaderboard();
+  renderTest();
 }
 
 function renderScreen() {
-  const screens = [['join', tr('Codul de intrare')], ['poll', tr('Sondajul')], ['qa', tr('Întrebările')], ['leaderboard', tr('Clasamentul')]];
-  $('#screen').replaceChildren(...screens.map(([id, label]) => h('button', {
+  const screens = [['join', tr('Codul de intrare')], ['poll', tr('Sondajul')], ['qa', tr('Întrebările')], ['leaderboard', tr('Clasamentul')], ['test', tr('Rezultatele testului')]];
+  fill($('#screen'), ...screens.map(([id, label]) => h('button', {
     type: 'button', class: 'sm', 'aria-pressed': String(state.event.settings.screen === id),
     onclick: () => act('event:update', { settings: { screen: id } }),
   }, label)));
@@ -84,9 +93,9 @@ function renderLinks() {
   const rows = [
     [tr('Participanți'), `${base}/e/${code}`],
     [tr('Ecran de proiecție'), `${base}/present/${code}`],
-    [tr('Administrare (secret!)'), `${base}/admin/${code}#key=${key}`],
   ];
-  $('#links').replaceChildren(...rows.map(([label, url]) => {
+  if (key) rows.push([tr('Administrare (secret!)'), `${base}/admin/${code}#key=${key}`]);
+  fill($('#links'), ...rows.map(([label, url]) => {
     const secret = url.includes('#key=');
     const shown = secret ? url.replace(/#key=.*/, '#key=••••••••') : url;
     return h('div', {},
@@ -104,10 +113,10 @@ function statusBadge(p) {
 function renderPolls() {
   const box = $('#polls');
   if (!state.polls.length) {
-    box.replaceChildren(h('div', { class: 'card empty' }, h('p', {}, tr('Niciun sondaj încă.')), h('p', { class: 'small' }, tr('Creează primul sondaj sau quiz cu butonul de mai sus.'))));
+    fill(box, h('div', { class: 'card empty' }, h('p', {}, tr('Niciun sondaj încă.')), h('p', { class: 'small' }, tr('Creează primul sondaj sau quiz cu butonul de mai sus.'))));
     return;
   }
-  box.replaceChildren(...state.polls.map((p, idx) => {
+  fill(box, ...state.polls.map((p, idx) => {
     const isLive = p.status === 'live';
     const actions = [
       isLive
@@ -144,7 +153,12 @@ function renderPolls() {
   }));
 }
 
+const replying = new Set();
+const replyDrafts = new Map();
+
 function renderQuestions() {
+  // Don't rebuild the list under the organizer's cursor while they type a reply.
+  if ($('#questions').contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA') return;
   const all = state.questions;
   const pending = all.filter((q) => q.status === 'pending').length;
   const badge = $('#pending-count');
@@ -156,27 +170,60 @@ function renderQuestions() {
     b.textContent = `${tr({ pending: 'În așteptare', visible: 'Publicate', answered: 'Răspunse', archived: 'Arhivate' }[b.dataset.f])}${n ? ` (${n})` : ''}`;
   });
   const list = all.filter((q) => q.status === qaFilter);
-  if (!list.length) return $('#questions').replaceChildren(h('p', { class: 'empty small' }, tr('Nimic aici.')));
+  if (!list.length) return fill($('#questions'), h('p', { class: 'empty small' }, tr('Nimic aici.')));
   const btn = (label, action, q, cls = 'sm ghost') => h('button', { class: cls, type: 'button', onclick: () => act('question:moderate', { id: q.id, op: action }) }, tr(label));
-  $('#questions').replaceChildren(...list.map((q) => h('div', { class: `question${q.highlighted ? ' highlighted' : ''}` },
+  fill($('#questions'), ...list.map((q) => h('div', { class: `question${q.highlighted ? ' highlighted' : ''}` },
     h('div', { class: 'upvote btn', 'aria-hidden': 'true' }, h('span', {}, '▲'), h('strong', {}, q.votes)),
     h('div', { class: 'body' }, q.text,
       h('div', { class: 'meta' }, q.author || tr('Anonim'), ' · ', new Date(q.at).toLocaleTimeString(lang === 'ro' ? 'ro-RO' : 'en-GB', { hour: '2-digit', minute: '2-digit' })),
+      q.reply && !replying.has(q.id) ? h('div', { class: 'reply' }, h('strong', {}, tr('Răspunsul organizatorului:')), ' ', q.reply) : null,
+      replying.has(q.id) ? replyForm(q) : null,
       h('div', { class: 'row', style: { marginTop: '.4rem' } },
+        q.status !== 'archived' && !replying.has(q.id) ? h('button', { class: 'sm', type: 'button', onclick: () => { replying.add(q.id); renderQuestions(); $(`#reply-${q.id}`)?.focus(); } }, tr(q.reply ? 'Editează răspunsul' : 'Răspunde')) : null,
         q.status === 'pending' ? [btn('Publică', 'approve', q, 'sm primary'), btn('Arhivează', 'archive', q)] : null,
         q.status === 'visible' ? [btn(q.highlighted ? 'Scoate de pe ecran' : 'Pe ecran', 'highlight', q, q.highlighted ? 'sm primary' : 'sm'), btn('Marcat ca răspuns', 'answer', q), btn('Arhivează', 'archive', q)] : null,
         q.status === 'answered' || q.status === 'archived' ? btn('Readu în listă', 'restore', q) : null,
         h('button', { class: 'sm ghost danger', type: 'button', onclick: () => confirm(tr('Ștergi întrebarea?')) && act('question:moderate', { id: q.id, op: 'delete' }) }, tr('Șterge')))))));
 }
 
+function replyForm(q) {
+  const ta = h('textarea', {
+    id: `reply-${q.id}`, maxlength: '1000', rows: 3, value: replyDrafts.get(q.id) ?? q.reply,
+    placeholder: tr('Scrie răspunsul; îl văd toți participanții sub întrebare.'),
+    oninput: (e) => replyDrafts.set(q.id, e.target.value),
+  });
+  const close = () => { replying.delete(q.id); replyDrafts.delete(q.id); renderQuestions(); };
+  const form = h('form', { class: 'stack', style: { marginTop: '.4rem' } }, ta,
+    h('div', { class: 'row' },
+      h('button', { class: 'sm primary', type: 'submit' }, tr('Publică răspunsul')),
+      h('button', { class: 'sm ghost', type: 'button', onclick: close }, tr('Renunță')),
+      q.reply ? h('button', { class: 'sm ghost danger', type: 'button', onclick: async () => { if (await act('question:reply', { id: q.id, text: '' })) close(); } }, tr('Șterge răspunsul')) : null));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (await act('question:reply', { id: q.id, text: ta.value })) { close(); toast(tr('Răspuns publicat.')); }
+  });
+  return form;
+}
+
 function renderLeaderboard() {
   const lb = state.leaderboard;
-  $('#leaderboard').replaceChildren(lb.length
-    ? h('ol', { class: 'leader' }, lb.map((r) => h('li', {}, h('span', {}, `${r.rank}. ${r.name || tr('Anonim')}`), h('span', { class: 'pts' }, tr('{score} · {correct} corecte', r)))))
+  fill($('#leaderboard'), lb.length
+    ? h('ol', { class: 'leader' }, lb.map((r) => h('li', {}, h('span', {}, `${r.rank}. ${r.name || tr('Anonim')}`), h('span', { class: 'pts' }, r.streak >= 2 ? `🔥${r.streak} · ` : '', tr('{score} · {correct} corecte', r)))))
     : h('p', { class: 'muted small' }, tr('Clasamentul apare după ce dezvălui răspunsul unui quiz.')));
 }
 
 // ---------- settings ----------
+$('#cert-enabled').addEventListener('change', (e) => act('event:update', { settings: { certEnabled: e.target.checked } }));
+$('#cert-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  act('event:update', { settings: { certIssuer: $('#cert-issuer').value, certMinScore: Number($('#cert-min').value) || 0 } })
+    .then((r) => r && toast(tr('Salvat.')));
+});
+$('#code-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const res = await act('event:code', { code: $('#code-input').value });
+  if (res) toast(tr('Codul nou: {code}', { code: res.code }));
+});
 $('#qa-enabled').addEventListener('change', (e) => act('event:update', { settings: { qaEnabled: e.target.checked } }));
 $('#qa-moderation').addEventListener('change', (e) => act('event:update', { settings: { qaModeration: e.target.checked } }));
 $('#closed').addEventListener('change', (e) => act('event:update', { settings: { closed: e.target.checked } }));
@@ -193,7 +240,7 @@ $('#delete-event').addEventListener('click', async () => {
 document.querySelectorAll('#qa-filter [data-f]').forEach((b) => b.addEventListener('click', () => { qaFilter = b.dataset.f; renderQuestions(); }));
 
 $('#export').addEventListener('click', async () => {
-  const res = await fetch(`/api/events/${code}/export.csv`, { headers: { 'X-Admin-Key': key, 'X-Lang': lang } });
+  const res = await fetch(`/api/events/${code}/export.csv`, { headers: key ? { 'X-Admin-Key': key, 'X-Lang': lang } : { 'X-Lang': lang } });
   if (!res.ok) return toast(tr('Exportul a eșuat.'), true);
   const url = URL.createObjectURL(await res.blob());
   h('a', { href: url, download: `quizy-${code}.csv` }).click();
@@ -243,7 +290,7 @@ $('#import-polls').addEventListener('click', () => {
   const preview = h('div', { class: 'small muted' });
   const update = () => {
     const polls = parsePolls(area.value);
-    preview.replaceChildren(polls.length
+    fill(preview, polls.length
       ? h('ol', { style: { margin: 0, paddingLeft: '1.2rem' } }, polls.map((p) => h('li', {},
         h('strong', {}, TYPE_LABELS[p.type]), ` · ${p.question || tr('(fără text)')}`, p.options ? tr(' · {n} opțiuni', { n: p.options.length }) : '')))
       : tr('Lipește întrebările mai sus.'));
@@ -257,7 +304,7 @@ $('#import-polls').addEventListener('click', () => {
     form.classList.add('hidden');
     toast(res.ids.length === 1 ? tr('Am importat o întrebare.') : tr('Am importat {n} întrebări.', { n: res.ids.length }));
   };
-  form.replaceChildren(
+  fill(form, 
     h('div', { class: 'row between' }, h('h2', { style: { margin: 0 } }, tr('Import în bloc')),
       h('button', { type: 'button', class: 'ghost sm', onclick: () => form.classList.add('hidden') }, '✕')),
     h('details', {}, h('summary', {}, tr('Cum scriu întrebările?')),
@@ -339,7 +386,7 @@ function openEditor(poll) {
     parts.push(h('div', { class: 'row' },
       h('button', { type: 'submit', class: 'primary' }, tr(poll ? 'Salvează' : 'Creează')),
       poll ? null : h('button', { type: 'button', onclick: () => save(true) }, tr('Creează și pornește'))));
-    form.replaceChildren(...parts);
+    fill(form, ...parts);
   };
 
   const save = async (start = false) => {
@@ -359,4 +406,98 @@ function openEditor(poll) {
   form.classList.remove('hidden');
   form.scrollIntoView({ behavior: 'smooth', block: 'start' });
   $('#f-q').focus();
+}
+
+
+// ---------- knowledge test (before / after) ----------
+const TEST_EXAMPLE = lang === 'ro'
+  ? `Ce înseamnă NIS2?
+* O directivă UE privind securitatea cibernetică
+- Un standard ISO
+- O lege doar pentru bănci
+
+Ce faci când primești un e-mail suspect?
+- Dau clic pe link ca să verific
+* Îl raportez echipei IT sau de securitate
+- Îl șterg și nu spun nimănui`
+  : `What is NIS2?
+* An EU cybersecurity directive
+- An ISO standard
+- A law for banks only
+
+What do you do with a suspicious e-mail?
+- Click the link to check it
+* Report it to the IT or security team
+- Delete it and tell no one`;
+
+function testImportForm() {
+  const form = $('#test-import');
+  const area = h('textarea', { id: 'test-area', rows: 7, placeholder: TEST_EXAMPLE, style: { fontFamily: 'ui-monospace, monospace', fontSize: '.85rem' } });
+  fill(form, 
+    h('label', { for: 'test-area' }, tr('Adaugă întrebări în test (marchează răspunsul corect cu „*”)')),
+    area,
+    h('div', { class: 'row' },
+      h('button', { type: 'submit', class: 'primary sm' }, tr('Adaugă în test')),
+      h('button', { type: 'button', class: 'sm ghost', onclick: () => { area.value = TEST_EXAMPLE; } }, tr('Pune exemplul'))));
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const polls = parsePolls(area.value);
+    if (!polls.length) return toast(tr('Lipește întrebările mai sus.'), true);
+    const res = await act('test:import', { polls: polls.map((p) => ({ ...p, type: 'quiz' })) });
+    if (!res) return;
+    area.value = '';
+    toast(res.ids.length === 1 ? tr('Am importat o întrebare.') : tr('Am importat {n} întrebări.', { n: res.ids.length }));
+  };
+}
+testImportForm();
+
+const pctText = (v) => (v === null || v === undefined ? '–' : `${v}%`);
+
+function renderTest() {
+  const tq = state.testQuestions;
+  const round = state.event.settings.testRound;
+  const r = state.test;
+  const status = $('#test-status');
+  status.className = `badge${round ? ' live' : ''}`;
+  status.textContent = round === 'pre' ? tr('Test inițial deschis') : round === 'post' ? tr('Test final deschis') : tr('{n} întrebări', { n: tq.length });
+
+  const roundBtn = (which, label) => {
+    const open = round === which;
+    return h('button', {
+      type: 'button', class: open ? 'sm' : 'sm primary', disabled: !tq.length,
+      onclick: () => act('event:update', { settings: { testRound: open ? null : which } }),
+    }, open ? tr('■ Închide {label}', { label }) : tr('▶ Deschide {label}', { label }));
+  };
+  fill($('#test-controls'), 
+    roundBtn('pre', tr('testul inițial')),
+    roundBtn('post', tr('testul final')),
+    h('button', { type: 'button', class: 'sm', disabled: !tq.length, onclick: () => act('event:update', { settings: { screen: 'test' } }) }, tr('Arată rezultatele pe ecran')));
+
+  if (!tq.length) {
+    fill($('#test-report'), h('p', { class: 'muted small', style: { margin: 0 } }, tr('Adaugă întâi întrebările testului mai jos.')));
+  } else {
+    const delta = r.average.pre !== null && r.average.post !== null ? r.average.post - r.average.pre : null;
+    fill($('#test-report'), 
+      h('div', { class: 'test-summary' },
+        h('div', {}, h('div', { class: 'small muted' }, tr('Test inițial')), h('div', { class: 'big-num' }, pctText(r.average.pre)), h('div', { class: 'small muted' }, votersLabel(r.participants.pre))),
+        h('div', { class: 'arrow' }, '→'),
+        h('div', {}, h('div', { class: 'small muted' }, tr('Test final')), h('div', { class: 'big-num' }, pctText(r.average.post)), h('div', { class: 'small muted' }, votersLabel(r.participants.post))),
+        delta !== null ? h('div', { class: `gain ${delta >= 0 ? 'up' : 'down'}` }, `${delta >= 0 ? '+' : ''}${delta}`, h('div', { class: 'small' }, tr('puncte procentuale'))) : null),
+      r.matched.gain !== null ? h('p', { class: 'small', style: { margin: '.5rem 0' } },
+        tr('Dintre cei {n} care au dat ambele teste: {up} au progresat, {same} au rămas la fel, {down} au scăzut.', { n: r.participants.both, up: r.matched.improved, same: r.matched.same, down: r.matched.worse })) : null,
+      h('div', { class: 'bars' }, r.questions.map((q, i) => h('div', { class: 'test-q' },
+        h('div', { class: 'small', style: { fontWeight: 600 } }, `${i + 1}. ${q.question}`),
+        h('div', { class: 'bar-label small' }, h('span', { class: 'muted' }, tr('Înainte')), h('span', { class: 'n' }, pctText(q.pre))),
+        h('div', { class: 'bar-track' }, h('div', { class: 'bar-fill pre', style: { width: `${q.pre || 0}%` } })),
+        h('div', { class: 'bar-label small' }, h('span', { class: 'muted' }, tr('După')), h('span', { class: 'n' }, pctText(q.post))),
+        h('div', { class: 'bar-track' }, h('div', { class: 'bar-fill', style: { width: `${q.post || 0}%` } }))))));
+  }
+
+  $('#test-questions-summary').textContent = tr('Întrebările testului ({n})', { n: tq.length });
+  fill($('#test-questions'), ...tq.map((q, i) => h('div', { class: 'poll-item' },
+    h('div', { class: 'row between' },
+      h('div', { class: 'q' }, `${i + 1}. ${q.question}`),
+      h('button', { class: 'sm ghost danger', type: 'button', onclick: () => confirm(tr('Ștergi întrebarea din test și răspunsurile ei?')) && act('poll:delete', { id: q.id }) }, tr('Șterge'))),
+    h('ul', { class: 'small', style: { margin: '.3rem 0 0', paddingLeft: '1.2rem' } },
+      q.options.map((o, j) => h('li', { style: q.correct.includes(j) ? { color: 'var(--ok)', fontWeight: 600 } : {} }, o, q.correct.includes(j) ? ' ✓' : ''))))));
 }

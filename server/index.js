@@ -5,6 +5,7 @@ const { http, close } = createApp({
   dbFile: process.env.DATABASE_FILE || 'data/quizy.db',
   publicUrl: (process.env.PUBLIC_URL || '').replace(/\/$/, ''),
   trustProxy: process.env.TRUST_PROXY === '1',
+  adminPassword: process.env.ADMIN_PASSWORD || '',
 });
 
 const host = process.env.HOST || '0.0.0.0';
