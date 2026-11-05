@@ -6,15 +6,15 @@
 <title>CYBERGUARD Quizy Demo</title>
 <style>
 /* Layout: three live panes side by side (organizer · phone · projector), stacking on narrow screens. */
-/* Neon blue on deep navy: one deliberate dark look, same as the app. */
+/* CYBERGUARD gold on deep navy: one deliberate dark look, same as the app. */
 :root {
-  --bg: #040a1c; --surface: rgb(10 22 52 / 80%); --surface-2: rgb(30 80 160 / 22%); --text: #e8f2ff; --muted: #8ea7cf;
-  --border: rgb(70 170 255 / 24%); --primary: #1fb2ff; --primary-strong: #00d2ff; --primary-ink: #021327; --primary-soft: rgb(31 178 255 / 16%);
-  --glow: 0 0 0 1px rgb(31 178 255 / 55%), 0 0 18px rgb(31 178 255 / 45%);
-  --ok: #33e6a8; --ok-soft: rgb(51 230 168 / 14%); --danger: #ff6b7d; --danger-soft: rgb(255 107 125 / 14%); --warn: #ffbe5c; --warn-soft: rgb(255 190 92 / 14%);
-  --stage: rgb(3 8 24 / 78%); --stage-text: #f0f7ff; --stage-muted: #8ea7cf; --stage-track: rgb(40 110 220 / 22%);
-  --c1: #1fb2ff; --c2: #33e6c8; --c3: #7aa2ff; --c4: #59f0ff; --c5: #3d7bff; --c6: #a6e1ff;
-  --shadow: 0 1px 0 rgb(120 200 255 / 6%) inset, 0 10px 30px rgb(0 0 0 / 35%);
+  --bg: #050920; --surface: rgb(14 21 54 / 80%); --surface-2: rgb(52 66 128 / 30%); --text: #f4f1e8; --muted: #a4abc8;
+  --border: rgb(255 199 71 / 17%); --primary: #f5b400; --primary-strong: #ffd23f; --primary-ink: #0a0f2a; --primary-soft: rgb(245 180 0 / 14%);
+  --glow: 0 0 0 1px rgb(245 180 0 / 55%), 0 0 18px rgb(255 190 40 / 38%);
+  --ok: #33e6a8; --ok-soft: rgb(51 230 168 / 14%); --danger: #ff6b7d; --danger-soft: rgb(255 107 125 / 14%); --warn: #ff8a3d; --warn-soft: rgb(255 138 61 / 14%);
+  --stage: rgb(5 9 32 / 80%); --stage-text: #f4f1e8; --stage-muted: #a4abc8; --stage-track: rgb(52 66 128 / 30%);
+  --c1: #ffd23f; --c2: #f5b400; --c3: #8fb4ff; --c4: #ffe9a8; --c5: #ff9f43; --c6: #5ec8f2;
+  --shadow: 0 1px 0 rgb(255 220 140 / 6%) inset, 0 10px 30px rgb(0 0 0 / 40%);
   --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   color-scheme: dark;
 }
@@ -130,22 +130,22 @@ textarea { resize: vertical; }
 @media (prefers-reduced-motion: reduce) { .bar-fill, .cloud span { transition: none; } }
 
 .panel, .phone, .question { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-.brand b { color: var(--primary-strong); text-shadow: 0 0 14px rgb(0 210 255 / 70%); }
+.brand b { color: var(--primary-strong); text-shadow: 0 0 14px rgb(255 190 40 / 60%); }
 .primary { background: linear-gradient(180deg, var(--primary-strong), var(--primary)); color: var(--primary-ink); border-color: transparent; box-shadow: var(--glow); }
 .primary:hover { background: linear-gradient(180deg, var(--primary-strong), var(--primary)); filter: brightness(1.12); }
-input[type=text], textarea, select { background: rgb(2 8 24 / 70%); }
+input[type=text], textarea, select { background: rgb(3 6 22 / 72%); }
 .option[aria-pressed=true], .upvote[aria-pressed=true], .question.hl, .poll-item.live, .screen-switch button[aria-pressed=true], .stars button[aria-pressed=true] { box-shadow: var(--glow); }
-.tabs button[aria-selected=true] { background: #0b1836; box-shadow: var(--glow); }
-.bar-fill { background: linear-gradient(90deg, #1e6bff, var(--primary-strong)); box-shadow: 0 0 12px rgb(0 210 255 / 55%); }
+.tabs button[aria-selected=true] { background: #0e1638; box-shadow: var(--glow); }
+.bar-fill { background: linear-gradient(90deg, #e07b00, var(--primary-strong)); box-shadow: 0 0 12px rgb(255 190 40 / 45%); }
 .bar.correct .bar-fill { background: var(--ok); box-shadow: 0 0 12px rgb(51 230 168 / 55%); }
 .cloud span { text-shadow: 0 0 16px currentColor; }
-.avg, .join .code { text-shadow: 0 0 14px rgb(0 210 255 / 60%); }
-.phone { border-color: #0e1f45; box-shadow: var(--glow), var(--shadow); background: rgb(4 10 28 / 88%); }
-.phone-top { background: rgb(10 22 52 / 90%); }
-.stage { border: 1px solid var(--border); box-shadow: 0 0 40px rgb(0 160 255 / 18%); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-.join { background: #0b1836; color: var(--text); border: 1px solid var(--border); }
+.avg, .join .code { text-shadow: 0 0 14px rgb(255 190 40 / 55%); }
+.phone { border-color: #1a2350; box-shadow: var(--glow), var(--shadow); background: rgb(5 9 32 / 88%); }
+.phone-top { background: rgb(14 21 54 / 90%); }
+.stage { border: 1px solid var(--border); box-shadow: 0 0 40px rgb(255 180 30 / 14%); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.join { background: #0e1638; color: var(--text); border: 1px solid var(--border); }
 .stage .join .muted { color: var(--muted); max-width: 100%; overflow-wrap: anywhere; }
-.toast { background: #0b1836; color: var(--text); border: 1px solid var(--border); }
+.toast { background: #0e1638; color: var(--text); border: 1px solid var(--border); }
 @media (prefers-reduced-motion: reduce) { body { background-attachment: scroll; } }
 </style>
 </head>
@@ -153,7 +153,7 @@ input[type=text], textarea, select { background: rgb(2 8 24 / 70%); }
 
 <div class="page">
   <header class="intro">
-    <div class="brand"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9Ijk0IDYgMTEyIDE4MCIgd2lkdGg9IjExMiIgaGVpZ2h0PSIxODAiPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJzIiB4MT0iMCIgeTE9IjAiIHgyPSIwIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMDAzMzY2Ii8+PHN0b3Agb2Zmc2V0PSIuNSIgc3RvcC1jb2xvcj0iIzAwNEM5OSIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzAwNjZDQyIvPjwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIwIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNGRkQ3MDAiLz48c3RvcCBvZmZzZXQ9Ii41IiBzdG9wLWNvbG9yPSIjRkZDMTI1Ii8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjRkZBNTAwIi8+PC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHBhdGggZD0iTTEwMCwyMCBDMTAwLDIwIDE1MCwxMCAyMDAsMjAgTDIwMCwxMjAgQzIwMCwxNjAgMTUwLDE4MCAxNTAsMTgwIEMxNTAsMTgwIDEwMCwxNjAgMTAwLDEyMCBaIiBmaWxsPSJ1cmwoI3MpIiBzdHJva2U9IiMxZmIyZmYiIHN0cm9rZS13aWR0aD0iMyIvPgogIDxwYXRoIGQ9Ik0xNTAsNjAgTDEzMCw4MCBNMTUwLDYwIEwxNzAsODAgTTEzMCw4MCBMMTUwLDEwMCBNMTcwLDgwIEwxNTAsMTAwIiBzdHJva2U9InVybCgjYSkiIHN0cm9rZS13aWR0aD0iMyIgZmlsbD0ibm9uZSIvPgogIDxnIGZpbGw9InVybCgjYSkiPjxjaXJjbGUgY3g9IjE1MCIgY3k9IjYwIiByPSI4Ii8+PGNpcmNsZSBjeD0iMTMwIiBjeT0iODAiIHI9IjgiLz48Y2lyY2xlIGN4PSIxNzAiIGN5PSI4MCIgcj0iOCIvPjxjaXJjbGUgY3g9IjE1MCIgY3k9IjEwMCIgcj0iOCIvPjwvZz4KICA8dGV4dCB4PSIxNTAiIHk9IjE0MCIgZm9udC1mYW1pbHk9IkFyaWFsLCBIZWx2ZXRpY2EsIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI3MDAiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNGRkQ3MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGxldHRlci1zcGFjaW5nPSIzIj5TT0M8L3RleHQ+Cjwvc3ZnPgo=" alt="" style="height:1.7em;width:auto;vertical-align:middle;filter:drop-shadow(0 0 8px rgb(31 178 255 / 45%))"> CYBERGUARD <b>Quizy</b> <span class="muted small" style="font-weight:500">demo interactiv</span></div>
+    <div class="brand"><img src="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9Ijk0IDYgMTEyIDE4MCIgd2lkdGg9IjExMiIgaGVpZ2h0PSIxODAiPgogIDxkZWZzPgogICAgPGxpbmVhckdyYWRpZW50IGlkPSJzIiB4MT0iMCIgeTE9IjAiIHgyPSIwIiB5Mj0iMSI+PHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMDAzMzY2Ii8+PHN0b3Agb2Zmc2V0PSIuNSIgc3RvcC1jb2xvcj0iIzAwNEM5OSIvPjxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzAwNjZDQyIvPjwvbGluZWFyR3JhZGllbnQ+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImEiIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIwIj48c3RvcCBvZmZzZXQ9IjAiIHN0b3AtY29sb3I9IiNGRkQ3MDAiLz48c3RvcCBvZmZzZXQ9Ii41IiBzdG9wLWNvbG9yPSIjRkZDMTI1Ii8+PHN0b3Agb2Zmc2V0PSIxIiBzdG9wLWNvbG9yPSIjRkZBNTAwIi8+PC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHBhdGggZD0iTTEwMCwyMCBDMTAwLDIwIDE1MCwxMCAyMDAsMjAgTDIwMCwxMjAgQzIwMCwxNjAgMTUwLDE4MCAxNTAsMTgwIEMxNTAsMTgwIDEwMCwxNjAgMTAwLDEyMCBaIiBmaWxsPSJ1cmwoI3MpIiBzdHJva2U9IiNmZmM1M2QiIHN0cm9rZS13aWR0aD0iMyIvPgogIDxwYXRoIGQ9Ik0xNTAsNjAgTDEzMCw4MCBNMTUwLDYwIEwxNzAsODAgTTEzMCw4MCBMMTUwLDEwMCBNMTcwLDgwIEwxNTAsMTAwIiBzdHJva2U9InVybCgjYSkiIHN0cm9rZS13aWR0aD0iMyIgZmlsbD0ibm9uZSIvPgogIDxnIGZpbGw9InVybCgjYSkiPjxjaXJjbGUgY3g9IjE1MCIgY3k9IjYwIiByPSI4Ii8+PGNpcmNsZSBjeD0iMTMwIiBjeT0iODAiIHI9IjgiLz48Y2lyY2xlIGN4PSIxNzAiIGN5PSI4MCIgcj0iOCIvPjxjaXJjbGUgY3g9IjE1MCIgY3k9IjEwMCIgcj0iOCIvPjwvZz4KICA8dGV4dCB4PSIxNTAiIHk9IjE0MCIgZm9udC1mYW1pbHk9IkFyaWFsLCBIZWx2ZXRpY2EsIHNhbnMtc2VyaWYiIGZvbnQtd2VpZ2h0PSI3MDAiIGZvbnQtc2l6ZT0iMjgiIGZpbGw9IiNGRkQ3MDAiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGxldHRlci1zcGFjaW5nPSIzIj5TT0M8L3RleHQ+Cjwvc3ZnPgo=" alt="" style="height:1.7em;width:auto;vertical-align:middle;filter:drop-shadow(0 0 8px rgb(255 190 40 / 40%))"> CYBERGUARD <b>Quizy</b> <span class="muted small" style="font-weight:500">demo interactiv</span></div>
     <p>Cele trei ecrane ale aplicației, legate între ele: ce faci ca organizator apare pe telefon și pe proiector. Votează de pe telefon sau apasă „Simulează sala” ca să vezi 20 de participanți răspunzând.</p>
   </header>
 

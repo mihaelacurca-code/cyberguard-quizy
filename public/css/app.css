@@ -1,28 +1,29 @@
-/* Neon blue on deep navy, one deliberate dark look for every page (it is projected in dark rooms too). */
+/* CYBERGUARD: gold light on deep navy, the colors of the shield. One deliberate dark look
+   for every page (it is projected in dark rooms too). A client color per event replaces the gold. */
 :root {
-  --bg: #040a1c;
-  --surface: rgb(10 22 52 / 78%);
-  --surface-solid: #0b1836;
-  --surface-2: rgb(30 80 160 / 22%);
-  --text: #e8f2ff;
-  --muted: #8ea7cf;
-  --border: rgb(70 170 255 / 24%);
-  --primary: #1fb2ff;
-  --primary-strong: #00d2ff;
-  --primary-ink: #021327;
-  --primary-soft: rgb(31 178 255 / 16%);
-  --glow: 0 0 0 1px rgb(31 178 255 / 55%), 0 0 18px rgb(31 178 255 / 45%);
-  --glow-color: var(--glow-color);
-  --primary-deep: #1e6bff;
+  --bg: #050920;
+  --surface: rgb(14 21 54 / 80%);
+  --surface-solid: #0e1638;
+  --surface-2: rgb(52 66 128 / 30%);
+  --text: #f4f1e8;
+  --muted: #a4abc8;
+  --border: rgb(255 199 71 / 17%);
+  --primary: #f5b400;
+  --primary-strong: #ffd23f;
+  --primary-ink: #0a0f2a;
+  --primary-soft: rgb(245 180 0 / 14%);
+  --glow: 0 0 0 1px rgb(245 180 0 / 55%), 0 0 18px rgb(255 190 40 / 38%);
+  --glow-color: rgb(255 200 60 / 55%);
+  --primary-deep: #e07b00;
   --ok: #33e6a8;
   --ok-soft: rgb(51 230 168 / 14%);
-  --warn: #ffbe5c;
-  --warn-soft: rgb(255 190 92 / 14%);
+  --warn: #ff8a3d;
+  --warn-soft: rgb(255 138 61 / 14%);
   --danger: #ff6b7d;
   --danger-soft: rgb(255 107 125 / 14%);
-  --shadow: 0 1px 0 rgb(120 200 255 / 6%) inset, 0 10px 30px rgb(0 0 0 / 35%);
+  --shadow: 0 1px 0 rgb(255 220 140 / 6%) inset, 0 10px 30px rgb(0 0 0 / 40%);
   --radius: 14px;
-  --c1: #1fb2ff; --c2: #33e6c8; --c3: #7aa2ff; --c4: #59f0ff; --c5: #3d7bff; --c6: #a6e1ff;
+  --c1: #ffd23f; --c2: #f5b400; --c3: #8fb4ff; --c4: #ffe9a8; --c5: #ff9f43; --c6: #5ec8f2;
   color-scheme: dark;
 }
 
@@ -208,22 +209,22 @@ body.offline::before {
 
 /* ---------- neon treatment ---------- */
 body { min-height: 100vh; }
-.topbar { background: rgb(4 10 28 / 72%); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.topbar { background: rgb(5 9 32 / 75%); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 .card, .poll-item, .question, .phone-like { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
 .brand b { color: var(--primary-strong); text-shadow: 0 0 14px var(--glow-color); }
 .primary { background: linear-gradient(180deg, var(--primary-strong), var(--primary)); color: var(--primary-ink); border-color: transparent; box-shadow: var(--glow); }
 .primary:hover { background: linear-gradient(180deg, var(--primary-strong), var(--primary)); filter: brightness(1.12); }
-input[type=text], input[type=number], textarea, select { background: rgb(2 8 24 / 70%); }
+input[type=text], input[type=number], textarea, select { background: rgb(3 6 22 / 72%); }
 .option[aria-pressed=true], .upvote[aria-pressed=true], .question.highlighted, .poll-item.live { box-shadow: var(--glow); }
 .bars .bar-fill { background: linear-gradient(90deg, var(--primary-deep), var(--primary-strong)); box-shadow: 0 0 12px var(--glow-color); }
 .bars .bar.correct .bar-fill { background: var(--ok); box-shadow: 0 0 12px rgb(51 230 168 / 55%); }
 .cloud span { text-shadow: 0 0 16px currentColor; }
 .average, .timer, .join-box .code { text-shadow: 0 0 16px var(--glow-color); }
-.hero h1 { background: linear-gradient(90deg, #ffffff, #8fe3ff 60%, var(--primary-strong)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero h1 { background: linear-gradient(90deg, #ffffff, #ffe9a8 55%, var(--primary-strong)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .tabs button[aria-selected=true], .screen-switch button[aria-pressed=true], .stars button[aria-pressed=true] { box-shadow: var(--glow); }
 .tabs button[aria-selected=true] { background: var(--surface-solid); color: var(--text); }
 .toast { background: var(--surface-solid); color: var(--text); border: 1px solid var(--border); }
-.present-footer { background: rgb(4 10 28 / 60%); }
+.present-footer { background: rgb(5 9 32 / 60%); }
 @media (prefers-reduced-motion: reduce) { body { background-attachment: scroll; } }
 .badge:empty { display: none; }
 .features { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
@@ -297,7 +298,7 @@ table.events th, table.events td { padding: .65rem .8rem; text-align: left; bord
 table.events th { color: var(--muted); font-weight: 600; font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; }
 table.events td.num { font-variant-numeric: tabular-nums; text-align: right; }
 table.events tr:last-child td { border-bottom: 0; }
-.code-block { background: rgb(2 8 24 / 70%); border: 1px solid var(--border); border-radius: 10px; padding: .6rem .8rem; overflow-x: auto; }
+.code-block { background: rgb(3 6 22 / 72%); border: 1px solid var(--border); border-radius: 10px; padding: .6rem .8rem; overflow-x: auto; }
 .code-field { text-transform: uppercase; letter-spacing: .1em; font-weight: 700; }
 
 /* ---------- certificate verification ---------- */

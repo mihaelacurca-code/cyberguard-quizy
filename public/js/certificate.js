@@ -24,21 +24,21 @@ function fitText(ctx, text, maxWidth, size, weight = 700, family = 'system-ui, -
 }
 
 export async function drawCertificate(cert) {
-  const accent = brandAccent(cert.color) || { main: '#1fb2ff', strong: '#00d2ff', glow: 'rgba(0,210,255,0.8)' };
+  const accent = brandAccent(cert.color) || { main: '#f5b400', strong: '#ffd23f', glow: 'rgba(255,190,40,0.8)' };
   const canvas = document.createElement('canvas');
   canvas.width = W;
   canvas.height = H;
   const ctx = canvas.getContext('2d');
 
-  // background: deep navy with a soft neon glow
+  // background: deep navy with a soft gold glow
   const bg = ctx.createLinearGradient(0, 0, W, H);
-  bg.addColorStop(0, '#040a1c');
-  bg.addColorStop(1, '#0a1f4a');
+  bg.addColorStop(0, '#050920');
+  bg.addColorStop(1, '#141f52');
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, W, H);
   const glow = ctx.createRadialGradient(W * 0.15, H * 0.15, 0, W * 0.15, H * 0.15, W * 0.6);
-  glow.addColorStop(0, 'rgba(0,200,255,0.20)');
-  glow.addColorStop(1, 'rgba(0,200,255,0)');
+  glow.addColorStop(0, 'rgba(255,190,40,0.16)');
+  glow.addColorStop(1, 'rgba(255,190,40,0)');
   ctx.fillStyle = glow;
   ctx.fillRect(0, 0, W, H);
 
@@ -66,7 +66,7 @@ export async function drawCertificate(cert) {
 
   ctx.textAlign = 'center';
   if (!cert.hideProduct) {
-    ctx.fillStyle = '#e8f2ff';
+    ctx.fillStyle = '#f4f1e8';
     ctx.font = '700 44px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.fillText('CYBERGUARD Quizy', W / 2, 455);
   }
@@ -75,7 +75,7 @@ export async function drawCertificate(cert) {
   ctx.font = '800 96px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   ctx.fillText(t('CERTIFICAT DE PARTICIPARE'), W / 2, 590);
 
-  ctx.fillStyle = '#8ea7cf';
+  ctx.fillStyle = '#a4abc8';
   ctx.font = '400 44px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   ctx.fillText(t('Se acordă lui / ei'), W / 2, 700);
 
@@ -89,33 +89,33 @@ export async function drawCertificate(cert) {
   ctx.lineTo(W / 2 + 600, 880);
   ctx.stroke();
 
-  ctx.fillStyle = '#8ea7cf';
+  ctx.fillStyle = '#a4abc8';
   ctx.font = '400 44px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   ctx.fillText(t('pentru participarea la'), W / 2, 970);
-  ctx.fillStyle = '#e8f2ff';
+  ctx.fillStyle = '#f4f1e8';
   fitText(ctx, cert.event, W - 500, 64, 700);
   ctx.fillText(cert.event, W / 2, 1060);
 
   const date = new Date(cert.issuedAt).toLocaleDateString(lang === 'ro' ? 'ro-RO' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
   const details = [date];
   if (cert.score !== null && cert.score !== undefined) details.push(t('Scor la testul final: {score}%', { score: cert.score }));
-  ctx.fillStyle = '#8ea7cf';
+  ctx.fillStyle = '#a4abc8';
   ctx.font = '400 40px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   ctx.fillText(details.join('   ·   '), W / 2, 1160);
 
   // issuer (left) and verification (right)
   ctx.textAlign = 'left';
   if (cert.issuer) {
-    ctx.fillStyle = '#e8f2ff';
+    ctx.fillStyle = '#f4f1e8';
     ctx.font = '700 44px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.fillText(cert.issuer, 220, 1400);
-    ctx.fillStyle = '#8ea7cf';
+    ctx.fillStyle = '#a4abc8';
     ctx.font = '400 32px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
     ctx.fillText(t('Emis de'), 220, 1350);
   }
   const verifyUrl = `${location.host}/v/${cert.id}`;
   ctx.textAlign = 'right';
-  ctx.fillStyle = '#8ea7cf';
+  ctx.fillStyle = '#a4abc8';
   ctx.font = '400 30px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
   ctx.fillText(t('Verificare: {url}', { url: verifyUrl }), W - 430, 1400);
   ctx.fillText(t('Cod certificat: {id}', { id: cert.id }), W - 430, 1350);

@@ -66,7 +66,7 @@ function render() {
   const brand = ev.settings.brand || {};
   $('#logo-none').classList.toggle('hidden', Boolean(brand.logo));
   $('#logo-remove').classList.toggle('hidden', !brand.logo);
-  if (document.activeElement !== $('#brand-color')) $('#brand-color').value = brand.color || '#1fb2ff';
+  if (document.activeElement !== $('#brand-color')) $('#brand-color').value = brand.color || '#f5b400';
   $('#brand-bg').value = brand.background || 'neon';
   $('#brand-hide').checked = Boolean(brand.hideProduct);
   $('#cert-enabled').checked = ev.settings.certEnabled;
