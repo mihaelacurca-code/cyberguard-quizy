@@ -200,7 +200,7 @@ body.present { min-height: 100vh; display: flex; flex-direction: column; }
 .option:disabled { opacity: 1; cursor: default; }
 .option:disabled:not(.correct):not(.wrong):not([aria-pressed=true]) { opacity: .6; }
 body.offline::before {
-  content: "Conexiune pierdută — reîncerc…"; position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+  content: attr(data-offline); position: fixed; top: 0; left: 0; right: 0; z-index: 50;
   background: var(--warn); color: var(--primary-ink); text-align: center; font-size: .85rem; padding: .25rem;
 }
 

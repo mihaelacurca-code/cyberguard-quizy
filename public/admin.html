@@ -15,9 +15,10 @@
       <strong id="event-title" class="grow" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></strong>
     </div>
     <div class="row">
-      <span id="online" class="badge live" title="Participanți conectați acum"></span>
-      <a id="present-link" class="btn sm" target="_blank" rel="noopener">Ecran de proiecție ↗</a>
-      <button id="export" class="sm" type="button">Export CSV</button>
+      <span id="lang-slot"></span>
+      <span id="online" class="badge live" title="Participanți conectați acum" data-i18n-title></span>
+      <a id="present-link" class="btn sm" target="_blank" rel="noopener" data-i18n>Ecran de proiecție ↗</a>
+      <button id="export" class="sm" type="button" data-i18n>Export CSV</button>
     </div>
   </header>
 
@@ -27,10 +28,10 @@
     <div id="app" class="admin-grid hidden">
       <section>
         <div class="row between" style="margin-bottom:.75rem">
-          <h2 style="margin:0">Sondaje și quiz-uri</h2>
+          <h2 style="margin:0" data-i18n>Sondaje și quiz-uri</h2>
           <div class="row">
-            <button id="import-polls" type="button">Import în bloc</button>
-            <button id="new-poll" class="primary" type="button">+ Sondaj nou</button>
+            <button id="import-polls" type="button" data-i18n>Import în bloc</button>
+            <button id="new-poll" class="primary" type="button" data-i18n>+ Sondaj nou</button>
           </div>
         </div>
         <form id="editor" class="card stack hidden"></form>
@@ -39,22 +40,22 @@
 
       <section>
         <div class="card stack">
-          <h2>Ecranul proiectat arată</h2>
+          <h2 data-i18n>Ecranul proiectat arată</h2>
           <div id="screen" class="screen-switch"></div>
         </div>
 
         <div class="card stack">
-          <h2>Linkuri</h2>
+          <h2 data-i18n>Linkuri</h2>
           <div class="links" id="links"></div>
         </div>
 
         <div class="card stack">
           <div class="row between">
-            <h2 style="margin:0">Întrebări din public</h2>
+            <h2 style="margin:0" data-i18n>Întrebări din public</h2>
             <span id="pending-count" class="badge pending hidden"></span>
           </div>
-          <label class="check"><input type="checkbox" id="qa-enabled"> Q&amp;A activat</label>
-          <label class="check"><input type="checkbox" id="qa-moderation"> Moderare înainte de publicare</label>
+          <label class="check"><input type="checkbox" id="qa-enabled"> <span data-i18n>Q&amp;A activat</span></label>
+          <label class="check"><input type="checkbox" id="qa-moderation"> <span data-i18n>Moderare înainte de publicare</span></label>
           <div class="tabs" id="qa-filter">
             <button type="button" data-f="pending" class="sm">În așteptare</button>
             <button type="button" data-f="visible" class="sm" aria-selected="true">Publicate</button>
@@ -65,18 +66,18 @@
         </div>
 
         <div class="card stack">
-          <h2>🏆 Clasament quiz</h2>
+          <h2 data-i18n>🏆 Clasament quiz</h2>
           <div id="leaderboard"></div>
         </div>
 
         <div class="card stack">
-          <h2>Eveniment</h2>
+          <h2 data-i18n>Eveniment</h2>
           <form id="rename" class="row">
-            <input id="rename-input" class="grow" type="text" maxlength="120" aria-label="Numele evenimentului">
-            <button type="submit">Redenumește</button>
+            <input id="rename-input" class="grow" type="text" maxlength="120" aria-label="Numele evenimentului" data-i18n-aria>
+            <button type="submit" data-i18n>Redenumește</button>
           </form>
-          <label class="check"><input type="checkbox" id="closed"> Eveniment închis (nu mai primește răspunsuri)</label>
-          <button id="delete-event" class="danger" type="button">Șterge evenimentul definitiv</button>
+          <label class="check"><input type="checkbox" id="closed"> <span data-i18n>Eveniment închis (nu mai primește răspunsuri)</span></label>
+          <button id="delete-event" class="danger" type="button" data-i18n>Șterge evenimentul definitiv</button>
         </div>
       </section>
     </div>

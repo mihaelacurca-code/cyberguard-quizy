@@ -13,14 +13,14 @@
       <a class="brand" href="/"><img src="/img/cyberguard-mark.svg" alt="" width="22" height="35"><span>CYBERGUARD <b>Quizy</b></span></a>
       <div id="event-name" class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
     </div>
-    <button id="name-btn" class="sm ghost" type="button"></button>
+    <div class="row" style="flex-wrap:nowrap"><span id="lang-slot"></span><button id="name-btn" class="sm ghost" type="button"></button></div>
   </header>
   <main class="wrap">
     <div id="error" class="card empty hidden"></div>
     <div id="app" class="hidden">
       <div id="tabs" class="tabs" role="tablist" style="margin-bottom:1rem">
-        <button role="tab" data-tab="poll" aria-selected="true">Sondaj</button>
-        <button role="tab" data-tab="qa" aria-selected="false">Întrebări <span id="qa-count" class="badge"></span></button>
+        <button role="tab" data-tab="poll" aria-selected="true" data-i18n>Sondaj</button>
+        <button role="tab" data-tab="qa" aria-selected="false"><span data-i18n>Întrebări</span> <span id="qa-count" class="badge"></span></button>
       </div>
 
       <section id="tab-poll">
@@ -30,18 +30,18 @@
 
       <section id="tab-qa" class="hidden">
         <form id="ask" class="card stack">
-          <label for="ask-text">Pune o întrebare</label>
-          <textarea id="ask-text" maxlength="300" placeholder="Scrie întrebarea ta…" required></textarea>
+          <label for="ask-text" data-i18n>Pune o întrebare</label>
+          <textarea id="ask-text" maxlength="300" placeholder="Scrie întrebarea ta…" data-i18n-placeholder required></textarea>
           <div class="row between">
             <span id="ask-as" class="muted small"></span>
-            <button class="primary" type="submit">Trimite</button>
+            <button class="primary" type="submit" data-i18n>Trimite</button>
           </div>
         </form>
         <div class="row between" style="margin:1rem 0 .5rem">
-          <h2 style="margin:0">Întrebări</h2>
+          <h2 style="margin:0" data-i18n>Întrebări</h2>
           <div class="tabs" style="width:auto">
-            <button type="button" data-sort="top" aria-selected="true" class="sm">Populare</button>
-            <button type="button" data-sort="new" aria-selected="false" class="sm">Recente</button>
+            <button type="button" data-sort="top" aria-selected="true" class="sm" data-i18n>Populare</button>
+            <button type="button" data-sort="new" aria-selected="false" class="sm" data-i18n>Recente</button>
           </div>
         </div>
         <div id="questions"></div>

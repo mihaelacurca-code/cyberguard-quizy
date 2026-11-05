@@ -1,4 +1,7 @@
 // Shared helpers for every page. All user text goes through textContent.
+import { t, plural, lang } from './i18n.js';
+
+export { t, lang };
 
 export function h(tag, attrs = {}, ...children) {
   const el = document.createElement(tag);
@@ -52,7 +55,7 @@ export const codeFromPath = () => decodeURIComponent(location.pathname.split('/'
 
 // Connects, (re)joins after every reconnect, and resolves socket.io acks as promises.
 export function connect({ code, role, key, onState, onJoin, onError }) {
-  const socket = window.io({ transports: ['websocket', 'polling'] });
+  const socket = window.io({ transports: ['websocket', 'polling'], query: { lang } });
   const join = () => socket.emit('join', { code, role, key, participantId: role === 'audience' ? participantId() : undefined }, (res) => {
     if (res?.error) return onError?.(res.error);
     onJoin?.(res);
@@ -60,12 +63,12 @@ export function connect({ code, role, key, onState, onJoin, onError }) {
   });
   socket.on('connect', join);
   socket.on('state', onState);
-  socket.on('deleted', () => onError?.('Evenimentul a fost șters.'));
+  socket.on('deleted', () => onError?.(t('Evenimentul a fost șters.')));
   socket.on('disconnect', () => document.body.classList.add('offline'));
   socket.on('connect', () => document.body.classList.remove('offline'));
   socket.call = (event, payload) => new Promise((resolve, reject) => {
     socket.timeout(10_000).emit(event, payload, (err, res) => {
-      if (err) return reject(new Error('Conexiunea nu răspunde. Încearcă din nou.'));
+      if (err) return reject(new Error(t('Conexiunea nu răspunde. Încearcă din nou.')));
       if (res?.error) return reject(new Error(res.error));
       resolve(res);
     });
@@ -74,20 +77,19 @@ export function connect({ code, role, key, onState, onJoin, onError }) {
 }
 
 export const TYPE_LABELS = {
-  choice: 'Alegere multiplă',
-  quiz: 'Quiz',
-  wordcloud: 'Word cloud',
-  open: 'Text liber',
-  rating: 'Evaluare',
+  choice: t('Alegere multiplă'),
+  quiz: t('Quiz'),
+  wordcloud: t('Word cloud'),
+  open: t('Text liber'),
+  rating: t('Evaluare'),
 };
 
 const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0);
-const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
-export const votersLabel = (n) => plural(n, 'participant', 'participanți');
+export const votersLabel = (n) => plural(n, 'participant');
 
 export function renderResults(poll) {
   const r = poll.results;
-  if (!r) return h('p', { class: 'muted' }, 'Rezultatele sunt ascunse.');
+  if (!r) return h('p', { class: 'muted' }, t('Rezultatele sunt ascunse.'));
   switch (poll.type) {
     case 'choice':
     case 'quiz': {
@@ -101,13 +103,13 @@ export function renderResults(poll) {
     case 'rating': {
       const total = r.counts.reduce((a, b) => a + b, 0);
       return h('div', {},
-        h('div', { class: 'row' }, h('span', { class: 'average' }, r.average ?? '–'), h('span', { class: 'muted' }, `din ${poll.scale} · ${votersLabel(r.voters)}`)),
+        h('div', { class: 'row' }, h('span', { class: 'average' }, r.average ?? '–'), h('span', { class: 'muted' }, `${t('din {scale}', { scale: poll.scale })} · ${votersLabel(r.voters)}`)),
         h('div', { class: 'bars' }, r.counts.map((n, i) => i).reverse().map((i) => h('div', { class: 'bar' },
           h('div', { class: 'bar-label' }, h('span', {}, `${i + 1} ★`), h('span', { class: 'n' }, `${pct(r.counts[i], total)}% · ${r.counts[i]}`)),
           h('div', { class: 'bar-track' }, h('div', { class: 'bar-fill', style: { width: `${pct(r.counts[i], total)}%` } }))))));
     }
     case 'wordcloud': {
-      if (!r.words.length) return h('p', { class: 'empty' }, 'Încă nu există cuvinte.');
+      if (!r.words.length) return h('p', { class: 'empty' }, t('Încă nu există cuvinte.'));
       const max = r.words[0].count;
       const min = r.words[r.words.length - 1].count;
       const colors = ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6'];
@@ -122,13 +124,13 @@ export function renderResults(poll) {
             style: { fontSize: `${(0.9 + t * 2.6).toFixed(2)}em`, color: `var(${colors[[...w.word].reduce((a, c) => a + c.charCodeAt(0), 0) % colors.length]})` },
           }, w.word);
         })),
-        h('p', { class: 'muted small' }, `${plural(r.responses, 'răspuns', 'răspunsuri')} · ${votersLabel(r.voters)}`));
+        h('p', { class: 'muted small' }, `${plural(r.responses, 'answer')} · ${votersLabel(r.voters)}`));
     }
     case 'open': {
-      if (!r.answers.length) return h('p', { class: 'empty' }, 'Încă nu există răspunsuri.');
+      if (!r.answers.length) return h('p', { class: 'empty' }, t('Încă nu există răspunsuri.'));
       return h('div', {},
         h('ul', { class: 'answers' }, r.answers.map((a) => h('li', {}, a.text, a.name ? h('div', { class: 'who' }, a.name) : null))),
-        h('p', { class: 'muted small' }, `${plural(r.responses, 'răspuns', 'răspunsuri')} · ${votersLabel(r.voters)}`));
+        h('p', { class: 'muted small' }, `${plural(r.responses, 'answer')} · ${votersLabel(r.voters)}`));
     }
   }
   return h('div');
@@ -141,5 +143,5 @@ export function timeLeft(poll, skew = 0) {
 }
 
 export function copy(text) {
-  navigator.clipboard?.writeText(text).then(() => toast('Copiat.'), () => toast('Nu am putut copia.', true));
+  navigator.clipboard?.writeText(text).then(() => toast(t('Copiat.')), () => toast(t('Nu am putut copia.'), true));
 }

@@ -9,41 +9,41 @@
   <link rel="stylesheet" href="/css/app.css">
 </head>
 <body>
-  <header class="topbar"><a class="brand" href="/"><img src="/img/cyberguard-mark.svg" alt="" width="22" height="35"><span>CYBERGUARD <b>Quizy</b></span></a></header>
+  <header class="topbar"><a class="brand" href="/"><img src="/img/cyberguard-mark.svg" alt="" width="22" height="35"><span>CYBERGUARD <b>Quizy</b></span></a><span id="lang-slot"></span></header>
   <main class="wrap">
     <section class="hero">
-      <h1>Interacțiune live cu publicul</h1>
-      <p>Sondaje, quiz-uri, word cloud și întrebări din sală. Gratuit, fără cont, fără limită de întrebări sau participanți.</p>
+      <h1 data-i18n>Interacțiune live cu publicul</h1>
+      <p data-i18n>Sondaje, quiz-uri, word cloud și întrebări din sală. Gratuit, fără cont, fără limită de întrebări sau participanți.</p>
     </section>
 
     <section class="card">
-      <h2>Participi la un eveniment?</h2>
+      <h2 data-i18n>Participi la un eveniment?</h2>
       <form id="join" class="row">
-        <input id="join-code" class="code-input grow" type="text" inputmode="text" autocomplete="off" maxlength="6" placeholder="COD" aria-label="Codul evenimentului" required>
-        <button class="primary big" type="submit">Intră</button>
+        <input id="join-code" class="code-input grow" type="text" inputmode="text" autocomplete="off" maxlength="6" placeholder="COD" aria-label="Codul evenimentului" data-i18n-placeholder data-i18n-aria required>
+        <button class="primary big" type="submit" data-i18n>Intră</button>
       </form>
     </section>
 
     <section class="card">
-      <h2>Organizezi un eveniment?</h2>
+      <h2 data-i18n>Organizezi un eveniment?</h2>
       <form id="create" class="stack">
         <div>
-          <label for="event-name">Numele evenimentului</label>
-          <input id="event-name" type="text" maxlength="120" placeholder="ex. Conferința anuală 2026" required>
+          <label for="event-name" data-i18n>Numele evenimentului</label>
+          <input id="event-name" type="text" maxlength="120" placeholder="ex. Conferința anuală 2026" data-i18n-placeholder required>
         </div>
-        <button class="primary" type="submit">Creează evenimentul</button>
+        <button class="primary" type="submit" data-i18n>Creează evenimentul</button>
       </form>
       <div id="mine" class="hidden" style="margin-top:1rem">
-        <h3>Evenimentele tale pe acest dispozitiv</h3>
+        <h3 data-i18n>Evenimentele tale pe acest dispozitiv</h3>
         <div id="mine-list" class="stack"></div>
       </div>
     </section>
 
     <section class="features">
-      <div class="card"><h3>Sondaje</h3><p class="muted small">Alegere simplă sau multiplă, evaluări cu stele, word cloud și răspunsuri libere.</p></div>
-      <div class="card"><h3>Quiz</h3><p class="muted small">Răspuns corect, cronometru, punctaj după viteză și clasament.</p></div>
-      <div class="card"><h3>Q&amp;A</h3><p class="muted small">Întrebări din public, voturi, moderare, evidențiere pe ecran.</p></div>
-      <div class="card"><h3>Ecran de proiecție</h3><p class="muted small">Cod QR, rezultate live și clasament pentru proiector.</p></div>
+      <div class="card"><h3 data-i18n>Sondaje</h3><p class="muted small" data-i18n>Alegere simplă sau multiplă, evaluări cu stele, word cloud și răspunsuri libere.</p></div>
+      <div class="card"><h3 data-i18n>Quiz</h3><p class="muted small" data-i18n>Răspuns corect, cronometru, punctaj după viteză și clasament.</p></div>
+      <div class="card"><h3>Q&amp;A</h3><p class="muted small" data-i18n>Întrebări din public, voturi, moderare, evidențiere pe ecran.</p></div>
+      <div class="card"><h3 data-i18n>Ecran de proiecție</h3><p class="muted small" data-i18n>Cod QR, rezultate live și clasament pentru proiector.</p></div>
     </section>
   </main>
   <script type="module" src="/js/landing.js"></script>

@@ -6,6 +6,7 @@ import { Server } from 'socket.io';
 import QRCode from 'qrcode';
 import { openDb } from './db.js';
 import { createStore, UserError } from './store.js';
+import { localize, pickLang } from './i18n.js';
 
 const PUBLIC = fileURLToPath(new URL('../public', import.meta.url));
 const FLUSH_MS = 200;
@@ -22,6 +23,13 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   if (trustProxy) app.set('trust proxy', 1);
   app.disable('x-powered-by');
   app.use(express.json({ limit: '32kb' }));
+  // Error messages go out in the language the page asked for (X-Lang: en | ro).
+  app.use((req, res, next) => {
+    const lang = pickLang(req.get('x-lang'));
+    const json = res.json.bind(res);
+    res.json = (body) => json(body && typeof body.error === 'string' ? { ...body, error: localize(body.error, lang) } : body);
+    next();
+  });
   app.use((req, res, next) => {
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Referrer-Policy', 'no-referrer');
@@ -79,7 +87,7 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
       limits.miss.take(req.ip);
       return res.status(403).json({ error: 'Acces interzis.' });
     }
-    const csv = store.exportRows(ev).map((r) => r.map(csvCell).join(',')).join('\r\n');
+    const csv = store.exportRows(ev, pickLang(req.get('x-lang'))).map((r) => r.map(csvCell).join(',')).join('\r\n');
     res.set('Content-Type', 'text/csv; charset=utf-8');
     res.set('Cache-Control', 'no-store');
     res.set('Content-Disposition', `attachment; filename="quizy-${ev.code}.csv"`);
@@ -158,6 +166,7 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
 
   io.on('connection', (socket) => {
     const ip = socketIp(socket);
+    const lang = pickLang(socket.handshake.query?.lang);
     let tokens = 40;
     let last = Date.now();
     const allow = () => {
@@ -170,7 +179,8 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     };
 
     const on = (name, fn) => socket.on(name, (payload, ack) => {
-      const reply = typeof ack === 'function' ? ack : () => {};
+      const send = typeof ack === 'function' ? ack : () => {};
+      const reply = (res) => send(res.error ? { ...res, error: localize(res.error, lang) } : res);
       if (!allow()) return reply({ error: 'Prea multe acțiuni. Încetinește puțin.' });
       try {
         reply({ ok: true, ...(fn(payload && typeof payload === 'object' ? payload : {}) || {}) });

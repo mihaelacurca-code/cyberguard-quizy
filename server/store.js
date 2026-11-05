@@ -427,7 +427,7 @@ export function createStore(db) {
 
   function leaderboard(ev, limit = 50) {
     return st.leaderboard.all(ev.id).slice(0, limit).map((r, i) => ({
-      rank: i + 1, name: r.name || 'Anonim', score: r.score, correct: r.correct, id: r.participant_id,
+      rank: i + 1, name: r.name || '', score: r.score, correct: r.correct, id: r.participant_id,
     }));
   }
 
@@ -567,8 +567,11 @@ export function createStore(db) {
     };
   }
 
-  function exportRows(ev) {
-    const rows = [['tip', 'întrebare', 'participant', 'nume', 'răspuns', 'punctaj', 'moment']];
+  function exportRows(ev, lang = 'ro') {
+    const en = lang === 'en';
+    const rows = [en
+      ? ['type', 'question', 'participant', 'name', 'answer', 'score', 'time']
+      : ['tip', 'întrebare', 'participant', 'nume', 'răspuns', 'punctaj', 'moment']];
     for (const p of st.polls.all(ev.id).map(hydratePoll)) {
       for (const v of st.votesByPoll.all(p.id)) {
         const value = JSON.parse(v.value);
@@ -577,7 +580,7 @@ export function createStore(db) {
       }
     }
     for (const qu of questions(ev)) {
-      rows.push(['q&a', qu.text, '', qu.author, `${qu.votes} voturi · ${qu.status}`, '', new Date(qu.at).toISOString()]);
+      rows.push(['q&a', qu.text, '', qu.author, `${qu.votes} ${en ? 'votes' : 'voturi'} · ${qu.status}`, '', new Date(qu.at).toISOString()]);
     }
     return rows;
   }

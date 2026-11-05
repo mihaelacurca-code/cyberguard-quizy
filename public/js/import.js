@@ -14,10 +14,10 @@
 //   Ce ai învățat azi?                ← no options → free text
 
 const TAGS = [
-  [/^\[(nor|word ?cloud|cuvinte)\]\s*/i, (p) => { p.type = 'wordcloud'; }],
-  [/^\[(text|liber|deschis)\]\s*/i, (p) => { p.type = 'open'; }],
+  [/^\[(nor|cloud|word ?cloud|cuvinte|words)\]\s*/i, (p) => { p.type = 'wordcloud'; }],
+  [/^\[(text|liber|deschis|open)\]\s*/i, (p) => { p.type = 'open'; }],
   [/^\[(multiplu|multi|multiple)\]\s*/i, (p) => { p.multi = true; }],
-  [/^\[(nota|notă|rating|evaluare|stele)(?:\s+(\d+))?\]\s*/i, (p, m) => { p.type = 'rating'; p.scale = Number(m[2]) || 5; }],
+  [/^\[(nota|notă|rating|evaluare|stele|stars|scale)(?:\s+(\d+))?\]\s*/i, (p, m) => { p.type = 'rating'; p.scale = Number(m[2]) || 5; }],
 ];
 
 export function parsePolls(text) {

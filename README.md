@@ -23,6 +23,12 @@ Sondaje live, quiz-uri și întrebări din public pentru evenimente — o altern
 
 Participanții nu își fac cont: intră cu un cod de 6 caractere sau scanează QR-ul. Organizatorul nu își face cont: primește un link secret de administrare.
 
+## Limbă: română și engleză
+
+Toate paginile (participant, organizator, ecran de proiecție) există în română și în engleză. Limba se alege automat după limba browserului (română pentru browserele în română, engleză pentru restul), iar butonul **RO / EN** din colțul paginii o schimbă; alegerea rămâne ținută minte pe acel dispozitiv. Fiecare participant își vede pagina în limba lui, chiar dacă sala e mixtă. Mesajele de la server (de ex. „Ai răspuns deja”), exportul CSV și etichetele de la „Import în bloc” (`[cloud]`, `[rating 5]`, `[multi]`, `[open]`) merg în ambele limbi.
+
+Întrebările și opțiunile rămân în limba în care le scrie organizatorul.
+
 ## Cum se folosește
 
 1. Pe pagina principală scrii numele evenimentului și apeși **Creează evenimentul**.
