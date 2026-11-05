@@ -91,12 +91,14 @@ npm test
 | `PORT` | `3000` | Portul HTTP |
 | `DATABASE_FILE` | `data/quizy.db` | Fișierul SQLite |
 | `PUBLIC_URL` | adresa din cerere | Adresa publică folosită în codul QR (ex. `https://quizy.exemplu.ro`) |
+| `HOST` | `0.0.0.0` | Interfața pe care ascultă (`127.0.0.1` în spatele unui reverse proxy) |
 | `TRUST_PROXY` | — | `1` când rulează în spatele unui reverse proxy (Nginx, Render, Fly) |
 
 ## Găzduire
 
 „Gratuit” înseamnă că aplicația nu are licență, abonament sau limite. Serverul pe care rulează îl alegi tu:
 
+- **Oracle Cloud „Always Free”** — cost zero, permanent, accesibil de oriunde, cu HTTPS. Ghid pas cu pas în [`deploy/ORACLE.md`](deploy/ORACLE.md); instalarea pe server e o singură comandă (`deploy/oracle-setup.sh`), care merge pe orice server Ubuntu.
 - **Laptopul tău, în rețeaua sălii** — cost zero. `npm start`, apoi participanții (pe același Wi-Fi) intră pe `http://IP-ul-laptopului:3000`. Setează `PUBLIC_URL` cu acea adresă ca QR-ul să fie corect.
 - **Docker pe orice VPS** (de la câțiva euro pe lună):
   ```bash

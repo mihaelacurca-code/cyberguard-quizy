@@ -7,7 +7,8 @@ const { http, close } = createApp({
   trustProxy: process.env.TRUST_PROXY === '1',
 });
 
-http.listen(port, () => console.log(`Quizy rulează pe http://localhost:${port}`));
+const host = process.env.HOST || '0.0.0.0';
+http.listen(port, host, () => console.log(`Quizy rulează pe http://${host === '0.0.0.0' ? 'localhost' : host}:${port}`));
 
 for (const sig of ['SIGINT', 'SIGTERM']) {
   process.on(sig, async () => {
