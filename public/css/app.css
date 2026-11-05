@@ -1,51 +1,33 @@
+/* Neon blue on deep navy, one deliberate dark look for every page (it is projected in dark rooms too). */
 :root {
-  --bg: #f6f5fb;
-  --surface: #ffffff;
-  --surface-2: #f0eef8;
-  --text: #1b1830;
-  --muted: #625d7a;
-  --border: #e2dfee;
-  --primary: #5b3fd9;
-  --primary-ink: #ffffff;
-  --primary-soft: #ece7ff;
-  --ok: #138a52;
-  --ok-soft: #e1f5ea;
-  --warn: #a35c00;
-  --warn-soft: #fff1dc;
-  --danger: #c0322b;
-  --danger-soft: #fde7e5;
-  --shadow: 0 1px 2px rgb(20 10 60 / 6%), 0 4px 16px rgb(20 10 60 / 6%);
+  --bg: #040a1c;
+  --surface: rgb(10 22 52 / 78%);
+  --surface-solid: #0b1836;
+  --surface-2: rgb(30 80 160 / 22%);
+  --text: #e8f2ff;
+  --muted: #8ea7cf;
+  --border: rgb(70 170 255 / 24%);
+  --primary: #1fb2ff;
+  --primary-strong: #00d2ff;
+  --primary-ink: #021327;
+  --primary-soft: rgb(31 178 255 / 16%);
+  --glow: 0 0 0 1px rgb(31 178 255 / 55%), 0 0 18px rgb(31 178 255 / 45%);
+  --ok: #33e6a8;
+  --ok-soft: rgb(51 230 168 / 14%);
+  --warn: #ffbe5c;
+  --warn-soft: rgb(255 190 92 / 14%);
+  --danger: #ff6b7d;
+  --danger-soft: rgb(255 107 125 / 14%);
+  --shadow: 0 1px 0 rgb(120 200 255 / 6%) inset, 0 10px 30px rgb(0 0 0 / 35%);
   --radius: 14px;
-  --c1: #5b3fd9; --c2: #0f9b8e; --c3: #e0632b; --c4: #d13b84; --c5: #2f7ae5; --c6: #8a9a12;
-  color-scheme: light;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #12101c;
-    --surface: #1c1929;
-    --surface-2: #262236;
-    --text: #efedf7;
-    --muted: #a9a3c2;
-    --border: #332e47;
-    --primary: #8f7bff;
-    --primary-ink: #120d2b;
-    --primary-soft: #2c2550;
-    --ok: #4cc98a;
-    --ok-soft: #173326;
-    --warn: #f0a548;
-    --warn-soft: #3a2a12;
-    --danger: #ff7a70;
-    --danger-soft: #3d1a18;
-    --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 6px 20px rgb(0 0 0 / 25%);
-    --c1: #8f7bff; --c2: #35c7b8; --c3: #ff8c55; --c4: #f06aab; --c5: #62a2ff; --c6: #b9c93a;
-    color-scheme: dark;
-  }
+  --c1: #1fb2ff; --c2: #33e6c8; --c3: #7aa2ff; --c4: #59f0ff; --c5: #3d7bff; --c6: #a6e1ff;
+  color-scheme: dark;
 }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; }
 body {
-  background: var(--bg);
+  background: var(--bg) url("/img/backdrop.svg") center / cover fixed no-repeat;
   color: var(--text);
   font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -121,7 +103,7 @@ button:disabled { opacity: .55; cursor: not-allowed; }
   background: var(--text); color: var(--bg); padding: .6rem 1rem; border-radius: 10px; max-width: calc(100% - 2rem);
   box-shadow: var(--shadow); font-weight: 500;
 }
-.toast.error { background: var(--danger); color: #fff; }
+.toast.error { background: var(--danger); color: var(--primary-ink); border-color: transparent; }
 
 .empty { text-align: center; color: var(--muted); padding: 2rem 1rem; }
 
@@ -219,5 +201,28 @@ body.present { min-height: 100vh; display: flex; flex-direction: column; }
 .option:disabled:not(.correct):not(.wrong):not([aria-pressed=true]) { opacity: .6; }
 body.offline::before {
   content: "Conexiune pierdută — reîncerc…"; position: fixed; top: 0; left: 0; right: 0; z-index: 50;
-  background: var(--warn); color: #fff; text-align: center; font-size: .85rem; padding: .25rem;
+  background: var(--warn); color: var(--primary-ink); text-align: center; font-size: .85rem; padding: .25rem;
 }
+
+/* ---------- neon treatment ---------- */
+body { min-height: 100vh; }
+.topbar { background: rgb(4 10 28 / 72%); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
+.card, .poll-item, .question, .phone-like { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+.brand b { color: var(--primary-strong); text-shadow: 0 0 14px rgb(0 210 255 / 70%); }
+.primary { background: linear-gradient(180deg, var(--primary-strong), var(--primary)); color: var(--primary-ink); border-color: transparent; box-shadow: var(--glow); }
+.primary:hover { background: linear-gradient(180deg, var(--primary-strong), var(--primary)); filter: brightness(1.12); }
+input[type=text], input[type=number], textarea, select { background: rgb(2 8 24 / 70%); }
+.option[aria-pressed=true], .upvote[aria-pressed=true], .question.highlighted, .poll-item.live { box-shadow: var(--glow); }
+.bars .bar-fill { background: linear-gradient(90deg, #1e6bff, var(--primary-strong)); box-shadow: 0 0 12px rgb(0 210 255 / 55%); }
+.bars .bar.correct .bar-fill { background: var(--ok); box-shadow: 0 0 12px rgb(51 230 168 / 55%); }
+.cloud span { text-shadow: 0 0 16px currentColor; }
+.average, .timer, .join-box .code { text-shadow: 0 0 16px rgb(0 210 255 / 60%); }
+.hero h1 { background: linear-gradient(90deg, #ffffff, #8fe3ff 60%, var(--primary-strong)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.tabs button[aria-selected=true], .screen-switch button[aria-pressed=true], .stars button[aria-pressed=true] { box-shadow: var(--glow); }
+.tabs button[aria-selected=true] { background: var(--surface-solid); color: var(--text); }
+.toast { background: var(--surface-solid); color: var(--text); border: 1px solid var(--border); }
+.present-footer { background: rgb(4 10 28 / 60%); }
+@media (prefers-reduced-motion: reduce) { body { background-attachment: scroll; } }
+.badge:empty { display: none; }
+.features { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
+.features .card + .card { margin-top: 0; }
