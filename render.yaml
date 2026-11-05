@@ -1,0 +1,18 @@
+# One-click deploy on Render (https://render.com). The disk keeps the SQLite database between deploys.
+services:
+  - type: web
+    name: quizy
+    runtime: node
+    plan: starter
+    buildCommand: npm ci --omit=dev
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: DATABASE_FILE
+        value: /var/data/quizy.db
+      - key: TRUST_PROXY
+        value: "1"
+    disk:
+      name: quizy-data
+      mountPath: /var/data
+      sizeGB: 1

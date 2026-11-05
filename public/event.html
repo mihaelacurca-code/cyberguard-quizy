@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quizy</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="grow">
+      <a class="brand" href="/">Quiz<b>y</b></a>
+      <div id="event-name" class="small muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+    </div>
+    <button id="name-btn" class="sm ghost" type="button"></button>
+  </header>
+  <main class="wrap">
+    <div id="error" class="card empty hidden"></div>
+    <div id="app" class="hidden">
+      <div id="tabs" class="tabs" role="tablist" style="margin-bottom:1rem">
+        <button role="tab" data-tab="poll" aria-selected="true">Sondaj</button>
+        <button role="tab" data-tab="qa" aria-selected="false">Întrebări <span id="qa-count" class="badge"></span></button>
+      </div>
+
+      <section id="tab-poll">
+        <div id="leaderboard" class="card hidden"></div>
+        <div id="poll" class="card"></div>
+      </section>
+
+      <section id="tab-qa" class="hidden">
+        <form id="ask" class="card stack">
+          <label for="ask-text">Pune o întrebare</label>
+          <textarea id="ask-text" maxlength="300" placeholder="Scrie întrebarea ta…" required></textarea>
+          <div class="row between">
+            <span id="ask-as" class="muted small"></span>
+            <button class="primary" type="submit">Trimite</button>
+          </div>
+        </form>
+        <div class="row between" style="margin:1rem 0 .5rem">
+          <h2 style="margin:0">Întrebări</h2>
+          <div class="tabs" style="width:auto">
+            <button type="button" data-sort="top" aria-selected="true" class="sm">Populare</button>
+            <button type="button" data-sort="new" aria-selected="false" class="sm">Recente</button>
+          </div>
+        </div>
+        <div id="questions"></div>
+      </section>
+    </div>
+  </main>
+  <script src="/socket.io/socket.io.min.js"></script>
+  <script type="module" src="/js/event.js"></script>
+</body>
+</html>

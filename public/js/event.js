@@ -1,0 +1,278 @@
+import { $, h, toast, storage, store, connect, codeFromPath, renderResults, timeLeft } from './common.js';
+
+const code = codeFromPath();
+let state = null;
+let me = { votes: {}, upvotes: [], score: null };
+let tab = 'poll';
+let sort = 'top';
+let skew = 0;
+let pollKey = '';
+let revealedSeen = new Set();
+
+const name = () => storage('quizy:name', '');
+
+function renderName() {
+  $('#name-btn').textContent = name() ? `${name()} ✎` : 'Adaugă numele ✎';
+  $('#ask-as').textContent = name() ? `Trimiți ca ${name()}` : 'Trimiți anonim';
+}
+$('#name-btn').addEventListener('click', () => {
+  const next = prompt('Numele tău (opțional, apare la quiz și la întrebări):', name());
+  if (next === null) return;
+  store('quizy:name', next.trim().slice(0, 40));
+  renderName();
+});
+renderName();
+
+const socket = connect({
+  code,
+  role: 'audience',
+  onJoin: (res) => { me = res.me; },
+  onState: (s) => {
+    state = s;
+    skew = s.now - Date.now();
+    render();
+  },
+  onError: (msg) => {
+    $('#app').classList.add('hidden');
+    const err = $('#error');
+    err.classList.remove('hidden');
+    err.replaceChildren(h('h2', {}, msg), h('a', { class: 'btn', href: '/' }, 'Înapoi la pagina principală'));
+  },
+});
+
+// ---------- tabs ----------
+for (const b of document.querySelectorAll('#tabs [data-tab]')) {
+  b.addEventListener('click', () => { tab = b.dataset.tab; render(); });
+}
+for (const b of document.querySelectorAll('[data-sort]')) {
+  b.addEventListener('click', () => {
+    sort = b.dataset.sort;
+    document.querySelectorAll('[data-sort]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+    renderQuestions();
+  });
+}
+
+function render() {
+  if (!state) return;
+  $('#app').classList.remove('hidden');
+  document.title = `${state.event.name} · Quizy`;
+  $('#event-name').textContent = `${state.event.name} · ${state.event.code}`;
+  const qa = state.event.settings.qaEnabled;
+  $('#tabs').classList.toggle('hidden', !qa);
+  if (!qa) tab = 'poll';
+  document.querySelectorAll('#tabs [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  $('#tab-poll').classList.toggle('hidden', tab !== 'poll');
+  $('#tab-qa').classList.toggle('hidden', tab !== 'qa');
+  $('#qa-count').textContent = state.questions.filter((q) => q.status === 'visible').length || '';
+  $('#ask').classList.toggle('hidden', state.event.settings.closed);
+
+  const p = state.poll;
+  if (p?.type === 'quiz' && p.revealed && !revealedSeen.has(p.id)) {
+    revealedSeen.add(p.id);
+    socket.call('me').then((r) => { me = r.me; pollKey = ''; renderPoll(); }).catch(() => {});
+  }
+  renderLeaderboard();
+  renderPoll();
+  renderQuestions();
+}
+
+// ---------- poll ----------
+function renderPoll() {
+  const box = $('#poll');
+  const p = state.poll;
+  const mine = p ? me.votes[p.id] || [] : [];
+  const key = JSON.stringify([p?.id, p?.status, p?.revealed, p?.showResults, mine, state.event.settings.closed]);
+  if (key === pollKey) {
+    // Only the numbers moved; keep whatever the participant is typing.
+    const res = box.querySelector('[data-results]');
+    if (res && p) res.replaceChildren(renderResults(p));
+    return;
+  }
+  pollKey = key;
+
+  if (!p) {
+    box.replaceChildren(h('div', { class: 'empty' },
+      h('h2', {}, state.event.settings.closed ? 'Evenimentul s-a încheiat' : 'Niciun sondaj activ acum'),
+      h('p', {}, state.event.settings.closed ? 'Mulțumim pentru participare!' : 'Pagina se actualizează singură când începe următorul.')));
+    return;
+  }
+
+  const answered = mine.length > 0;
+  const parts = [h('div', { class: 'row between' }, h('span', { class: 'badge live' }, 'Live'), timerEl(p))];
+  parts.push(h('h2', { style: { marginTop: '.75rem' } }, p.question));
+
+  if (p.type === 'choice') parts.push(choiceForm(p, mine));
+  if (p.type === 'quiz') parts.push(quizView(p, mine));
+  if (p.type === 'rating') parts.push(ratingForm(p, mine));
+  if (p.type === 'wordcloud' || p.type === 'open') parts.push(textForm(p, mine));
+
+  const showResults = p.results && (answered || p.type === 'quiz' || state.event.settings.closed);
+  if (showResults && p.type !== 'quiz') {
+    parts.push(h('hr', { style: { border: 0, borderTop: '1px solid var(--border)', margin: '1rem 0' } }));
+    parts.push(h('h3', {}, 'Rezultate'));
+    parts.push(h('div', { 'data-results': '' }, renderResults(p)));
+  } else if (answered && p.type !== 'quiz') {
+    parts.push(h('p', { class: 'muted', style: { marginTop: '1rem' } }, 'Răspuns trimis. Rezultatele apar pe ecran.'));
+  }
+  box.replaceChildren(...parts);
+}
+
+let timerInterval;
+function timerEl(p) {
+  clearInterval(timerInterval);
+  if (!p.timeLimit || p.status !== 'live' || p.revealed) return h('span');
+  const el = h('span', { class: 'timer' });
+  const tick = () => {
+    const left = timeLeft(p, skew);
+    el.textContent = `⏱ ${left}s`;
+    if (left === 0) { clearInterval(timerInterval); pollKey = ''; renderPoll(); }
+  };
+  tick();
+  timerInterval = setInterval(tick, 250);
+  return el;
+}
+
+async function send(p, value, btn) {
+  if (btn) btn.disabled = true;
+  try {
+    const res = await socket.call('vote', { pollId: p.id, value, name: name() });
+    me = res.me;
+    pollKey = '';
+    renderPoll();
+  } catch (e) {
+    toast(e.message, true);
+    if (btn) btn.disabled = false;
+  }
+}
+
+function choiceForm(p, mine) {
+  const picked = new Set(mine);
+  const list = h('div', { style: { marginTop: '1rem' } });
+  const submit = h('button', { class: 'primary big', type: 'button', style: { marginTop: '1rem', width: '100%', justifyContent: 'center' } },
+    mine.length ? 'Schimbă răspunsul' : 'Trimite');
+  const sync = () => list.querySelectorAll('.option').forEach((b, i) => b.setAttribute('aria-pressed', String(picked.has(i))));
+  p.options.forEach((opt, i) => list.append(h('button', {
+    class: 'option', type: 'button', 'aria-pressed': String(picked.has(i)),
+    onclick: () => {
+      if (state.event.settings.closed) return;
+      if (p.multi) { picked.has(i) ? picked.delete(i) : picked.add(i); sync(); return; }
+      picked.clear(); picked.add(i); sync();
+      send(p, [i]);
+    },
+  }, opt)));
+  if (!p.multi) return h('div', {}, list, h('p', { class: 'muted small', style: { marginTop: '.5rem' } }, 'Atinge o opțiune pentru a vota. Poți schimba răspunsul cât timp sondajul e deschis.'));
+  submit.addEventListener('click', () => {
+    if (!picked.size) return toast('Alege cel puțin o opțiune.', true);
+    send(p, [...picked], submit);
+  });
+  return h('div', {}, h('p', { class: 'muted small' }, 'Poți alege mai multe opțiuni.'), list, submit);
+}
+
+function quizView(p, mine) {
+  const pick = mine[0];
+  const answered = pick !== undefined;
+  const expired = p.timeLimit && timeLeft(p, skew) === 0;
+  const list = h('div', { style: { marginTop: '1rem' } }, p.options.map((opt, i) => {
+    let cls = 'option';
+    if (p.revealed && p.correct.includes(i)) cls += ' correct';
+    else if (p.revealed && pick === i) cls += ' wrong';
+    return h('button', {
+      class: cls, type: 'button', 'aria-pressed': String(pick === i),
+      disabled: answered || p.revealed || expired || state.event.settings.closed,
+      onclick: (e) => send(p, [i], e.currentTarget),
+    }, opt);
+  }));
+  let note;
+  if (p.revealed) {
+    const ok = answered && p.correct.includes(pick);
+    note = h('div', { class: 'card', style: { marginTop: '1rem', background: ok ? 'var(--ok-soft)' : 'var(--danger-soft)', boxShadow: 'none' } },
+      h('strong', {}, !answered ? 'Nu ai răspuns la această întrebare.' : ok ? 'Corect! 🎉' : 'Greșit.'),
+      me.score ? h('div', { class: 'small' }, `Locul ${me.score.rank} din ${me.score.of} · ${me.score.score} puncte`) : null);
+  } else if (answered) {
+    note = h('p', { class: 'muted', style: { marginTop: '1rem' } }, 'Răspuns înregistrat. Așteaptă dezvăluirea răspunsului corect.');
+  } else if (expired) {
+    note = h('p', { class: 'muted', style: { marginTop: '1rem' } }, 'Timpul a expirat.');
+  } else {
+    note = h('p', { class: 'muted small', style: { marginTop: '.5rem' } }, 'Ai un singur răspuns. Cu cât răspunzi mai repede, cu atât primești mai multe puncte.');
+  }
+  return h('div', {}, list, note, p.revealed && p.results ? h('div', { style: { marginTop: '1rem' }, 'data-results': '' }, renderResults(p)) : null);
+}
+
+function ratingForm(p, mine) {
+  const current = mine[0];
+  return h('div', { style: { marginTop: '1rem' } },
+    h('div', { class: 'stars' }, Array.from({ length: p.scale }, (_, i) => h('button', {
+      type: 'button', 'aria-pressed': String(current === i + 1), disabled: state.event.settings.closed,
+      'aria-label': `Nota ${i + 1}`, onclick: (e) => send(p, [i + 1], e.currentTarget),
+    }, `${i + 1}`))),
+    h('p', { class: 'muted small', style: { marginTop: '.5rem' } }, `1 = cel mai puțin, ${p.scale} = cel mai mult`));
+}
+
+function textForm(p, mine) {
+  const left = p.maxEntries - mine.length;
+  const wc = p.type === 'wordcloud';
+  const sent = mine.length ? h('ul', { class: 'answers', style: { marginTop: '1rem' } }, mine.map((m) => h('li', {}, m))) : null;
+  if (left <= 0 || state.event.settings.closed) {
+    return h('div', {}, sent, h('p', { class: 'muted', style: { marginTop: '.5rem' } }, wc ? 'Mulțumim! Ai trimis toate cuvintele.' : 'Mulțumim pentru răspuns!'));
+  }
+  const input = wc
+    ? h('input', { type: 'text', maxlength: '40', placeholder: 'Un cuvânt sau o expresie scurtă', required: true })
+    : h('textarea', { maxlength: '500', placeholder: 'Răspunsul tău…', required: true });
+  const btn = h('button', { class: 'primary', type: 'submit' }, 'Trimite');
+  const form = h('form', { class: 'stack', style: { marginTop: '1rem' } },
+    input,
+    h('div', { class: 'row between' }, h('span', { class: 'muted small' }, p.maxEntries > 1 ? `Mai poți trimite ${left}` : ''), btn));
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!input.value.trim()) return;
+    send(p, [input.value], btn);
+  });
+  return h('div', {}, sent, form);
+}
+
+function renderLeaderboard() {
+  const box = $('#leaderboard');
+  const lb = state.leaderboard;
+  box.classList.toggle('hidden', !lb);
+  if (!lb) return;
+  box.replaceChildren(h('h2', {}, '🏆 Clasament'),
+    lb.length ? h('ol', { class: 'leader' }, lb.map((r) => h('li', {}, h('span', {}, `${r.rank}. ${r.name}`), h('span', { class: 'pts' }, r.score))))
+      : h('p', { class: 'muted' }, 'Încă nu există punctaje.'),
+    me.score ? h('p', { class: 'small', style: { marginTop: '.5rem' } }, `Tu: locul ${me.score.rank} din ${me.score.of} · ${me.score.score} puncte`) : null);
+}
+
+// ---------- Q&A ----------
+$('#ask').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = e.submitter;
+  btn.disabled = true;
+  try {
+    const res = await socket.call('ask', { text: $('#ask-text').value, name: name() });
+    $('#ask-text').value = '';
+    toast(res.status === 'pending' ? 'Întrebarea a fost trimisă moderatorului.' : 'Întrebarea a fost publicată.');
+  } catch (err) {
+    toast(err.message, true);
+  } finally {
+    btn.disabled = false;
+  }
+});
+
+function renderQuestions() {
+  if (!state) return;
+  const box = $('#questions');
+  const list = [...state.questions].sort(sort === 'new'
+    ? (a, b) => b.at - a.at
+    : (a, b) => (b.highlighted - a.highlighted) || (a.status === 'answered') - (b.status === 'answered') || (b.votes - a.votes) || (b.at - a.at));
+  if (!list.length) return box.replaceChildren(h('p', { class: 'empty' }, 'Încă nu există întrebări. Fii primul!'));
+  const up = new Set(me.upvotes);
+  box.replaceChildren(...list.map((q) => h('div', { class: `question${q.highlighted ? ' highlighted' : ''}${q.status === 'answered' ? ' answered' : ''}` },
+    h('button', {
+      class: 'upvote', type: 'button', 'aria-pressed': String(up.has(q.id)), disabled: q.status !== 'visible',
+      'aria-label': 'Votează întrebarea',
+      onclick: async () => {
+        try { me = (await socket.call('upvote', { questionId: q.id })).me; renderQuestions(); } catch (e) { toast(e.message, true); }
+      },
+    }, h('span', {}, '▲'), h('strong', {}, q.votes)),
+    h('div', { class: 'body' }, q.text,
+      h('div', { class: 'meta' }, q.author || 'Anonim', q.highlighted ? ' · pe ecran acum' : '', q.status === 'answered' ? ' · răspuns' : '')))));
+}

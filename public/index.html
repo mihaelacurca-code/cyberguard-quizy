@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="ro">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Quizy — sondaje live, quiz și Q&amp;A</title>
+  <meta name="description" content="Sondaje live, quiz și întrebări din public pentru evenimente. Gratuit, fără limită de întrebări sau participanți.">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/">Quiz<b>y</b></a></header>
+  <main class="wrap">
+    <section class="hero">
+      <h1>Interacțiune live cu publicul</h1>
+      <p>Sondaje, quiz-uri, word cloud și întrebări din sală. Gratuit, fără cont, fără limită de întrebări sau participanți.</p>
+    </section>
+
+    <section class="card">
+      <h2>Participi la un eveniment?</h2>
+      <form id="join" class="row">
+        <input id="join-code" class="code-input grow" type="text" inputmode="text" autocomplete="off" maxlength="6" placeholder="COD" aria-label="Codul evenimentului" required>
+        <button class="primary big" type="submit">Intră</button>
+      </form>
+    </section>
+
+    <section class="card">
+      <h2>Organizezi un eveniment?</h2>
+      <form id="create" class="stack">
+        <div>
+          <label for="event-name">Numele evenimentului</label>
+          <input id="event-name" type="text" maxlength="120" placeholder="ex. Conferința anuală 2026" required>
+        </div>
+        <button class="primary" type="submit">Creează evenimentul</button>
+      </form>
+      <div id="mine" class="hidden" style="margin-top:1rem">
+        <h3>Evenimentele tale pe acest dispozitiv</h3>
+        <div id="mine-list" class="stack"></div>
+      </div>
+    </section>
+
+    <section class="features">
+      <div class="card"><h3>Sondaje</h3><p class="muted small">Alegere simplă sau multiplă, evaluări cu stele, word cloud și răspunsuri libere.</p></div>
+      <div class="card"><h3>Quiz</h3><p class="muted small">Răspuns corect, cronometru, punctaj după viteză și clasament.</p></div>
+      <div class="card"><h3>Q&amp;A</h3><p class="muted small">Întrebări din public, voturi, moderare, evidențiere pe ecran.</p></div>
+      <div class="card"><h3>Ecran de proiecție</h3><p class="muted small">Cod QR, rezultate live și clasament pentru proiector.</p></div>
+    </section>
+  </main>
+  <script type="module" src="/js/landing.js"></script>
+</body>
+</html>
