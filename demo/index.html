@@ -1,0 +1,631 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Quizy Demo</title>
+<style>
+/* Layout: three live panes side by side (organizer · phone · projector), stacking on narrow screens. */
+:root {
+  --bg: #f6f5fb; --surface: #ffffff; --surface-2: #f0eef8; --text: #1b1830; --muted: #625d7a;
+  --border: #e2dfee; --primary: #5b3fd9; --primary-ink: #ffffff; --primary-soft: #ece7ff;
+  --ok: #138a52; --ok-soft: #e1f5ea; --danger: #c0322b; --danger-soft: #fde7e5; --warn: #a35c00; --warn-soft: #fff1dc;
+  --stage: #1d1838; --stage-text: #f3f1ff; --stage-muted: #b4addb; --stage-track: #2f2858;
+  --c1: #5b3fd9; --c2: #0f9b8e; --c3: #e0632b; --c4: #d13b84; --c5: #2f7ae5; --c6: #8a9a12;
+  --shadow: 0 1px 2px rgb(20 10 60 / 6%), 0 4px 16px rgb(20 10 60 / 6%);
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12101c; --surface: #1c1929; --surface-2: #262236; --text: #efedf7; --muted: #a9a3c2;
+  --border: #332e47; --primary: #8f7bff; --primary-ink: #120d2b; --primary-soft: #2c2550;
+  --ok: #4cc98a; --ok-soft: #173326; --danger: #ff7a70; --danger-soft: #3d1a18; --warn: #f0a548; --warn-soft: #3a2a12;
+  --stage: #0b0916; --stage-text: #f3f1ff; --stage-muted: #a9a3c2; --stage-track: #262040;
+  --c1: #8f7bff; --c2: #35c7b8; --c3: #ff8c55; --c4: #f06aab; --c5: #62a2ff; --c6: #b9c93a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 6px 20px rgb(0 0 0 / 25%); color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #12101c; --surface: #1c1929; --surface-2: #262236; --text: #efedf7; --muted: #a9a3c2;
+  --border: #332e47; --primary: #8f7bff; --primary-ink: #120d2b; --primary-soft: #2c2550;
+  --ok: #4cc98a; --ok-soft: #173326; --danger: #ff7a70; --danger-soft: #3d1a18; --warn: #f0a548; --warn-soft: #3a2a12;
+  --stage: #0b0916; --stage-text: #f3f1ff; --stage-muted: #a9a3c2; --stage-track: #262040;
+  --c1: #8f7bff; --c2: #35c7b8; --c3: #ff8c55; --c4: #f06aab; --c5: #62a2ff; --c6: #b9c93a;
+  --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 6px 20px rgb(0 0 0 / 25%); color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.5 var(--font); -webkit-font-smoothing: antialiased; }
+.page { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 40px; max-width: 1500px; margin: 0 auto; }
+header.intro { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline; justify-content: space-between; margin-bottom: 18px; }
+.brand { font-weight: 800; font-size: 1.5rem; letter-spacing: -.02em; }
+.brand b { color: var(--primary); }
+.intro p { margin: 0; color: var(--muted); max-width: 70ch; }
+h2, h3 { margin: 0; line-height: 1.2; text-wrap: balance; }
+h2 { font-size: 1.05rem; }
+h3 { font-size: .95rem; }
+.label { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.muted { color: var(--muted); }
+.small { font-size: .85rem; }
+
+.grid { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .8fr) minmax(0, 1.25fr); gap: 18px; align-items: start; }
+@media (max-width: 1100px) { .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); } .stage-col { grid-column: 1 / -1; } }
+@media (max-width: 720px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+.col { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.col-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 32px; }
+
+.panel { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 14px; box-shadow: var(--shadow); display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+
+button { font: inherit; font-weight: 600; font-size: .85rem; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; padding: 6px 11px; cursor: pointer; min-height: 34px; }
+button:hover { background: var(--surface-2); }
+button:disabled { opacity: .5; cursor: not-allowed; }
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+.primary { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+.primary:hover { background: var(--primary); filter: brightness(1.08); }
+.ghost { background: transparent; border-color: transparent; }
+.danger { color: var(--danger); }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+input[type=text], textarea, select { width: 100%; font: inherit; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 9px; padding: 8px 10px; }
+textarea { resize: vertical; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .82rem; }
+
+.tabs { display: flex; gap: 4px; background: var(--surface-2); padding: 4px; border-radius: 11px; }
+.tabs button { flex: 1; border: 0; background: transparent; }
+.tabs button[aria-selected=true] { background: var(--surface); box-shadow: var(--shadow); }
+
+.badge { display: inline-block; font-size: .68rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--surface-2); color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.badge.live { background: var(--ok-soft); color: var(--ok); }
+.badge.pending { background: var(--warn-soft); color: var(--warn); }
+
+.poll-item { border: 1px solid var(--border); border-radius: 11px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+.poll-item.live { border-color: var(--ok); box-shadow: 0 0 0 2px var(--ok-soft); }
+.poll-item .q { font-weight: 600; overflow-wrap: anywhere; }
+.screen-switch { display: flex; gap: 6px; flex-wrap: wrap; }
+.screen-switch button[aria-pressed=true] { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+
+/* phone */
+.phone { width: 100%; max-width: 360px; margin: 0 auto; border: 10px solid var(--text); border-radius: 34px; background: var(--bg); overflow: hidden; box-shadow: var(--shadow); }
+.phone-top { display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--border); }
+.phone-body { padding: 12px; display: flex; flex-direction: column; gap: 10px; min-height: 480px; max-height: 620px; overflow-y: auto; }
+.option { width: 100%; text-align: left; padding: 11px 12px; border-radius: 11px; border: 2px solid var(--border); font-weight: 500; font-size: .92rem; }
+.option[aria-pressed=true] { border-color: var(--primary); background: var(--primary-soft); }
+.option.correct { border-color: var(--ok); background: var(--ok-soft); }
+.option.wrong { border-color: var(--danger); background: var(--danger-soft); }
+.option:disabled { opacity: 1; cursor: default; }
+.stars { display: flex; gap: 6px; flex-wrap: wrap; }
+.stars button { min-width: 42px; }
+.stars button[aria-pressed=true] { background: var(--primary); color: var(--primary-ink); border-color: var(--primary); }
+.note { border-radius: 11px; padding: 10px 12px; background: var(--surface-2); }
+.note.ok { background: var(--ok-soft); }
+.note.bad { background: var(--danger-soft); }
+.empty { text-align: center; color: var(--muted); padding: 28px 8px; }
+
+/* results */
+.bars { display: flex; flex-direction: column; gap: 8px; }
+.bar-label { display: flex; justify-content: space-between; gap: 8px; font-weight: 500; }
+.bar-label .n { color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bar-track { height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; margin-top: 3px; }
+.bar-fill { height: 100%; border-radius: 999px; background: var(--primary); transition: width .45s ease; }
+.bar.correct .bar-fill { background: var(--ok); }
+.cloud { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 12px; padding: 6px; }
+.cloud span { font-weight: 700; line-height: 1.1; transition: font-size .4s ease; }
+.answers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.answers li { padding: 8px 10px; border-radius: 9px; background: var(--surface-2); overflow-wrap: anywhere; }
+.avg { font-size: 2rem; font-weight: 800; color: var(--primary); font-variant-numeric: tabular-nums; }
+
+.question { display: flex; gap: 10px; padding: 9px; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); }
+.question.hl { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-soft); }
+.question .body { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.question .meta { font-size: .78rem; color: var(--muted); }
+.upvote { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 44px; line-height: 1.1; padding: 4px; }
+.upvote[aria-pressed=true] { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+
+/* projector */
+.stage { background: var(--stage); color: var(--stage-text); border-radius: 14px; min-height: 340px; max-width: 100%; padding: clamp(14px, 2.4vw, 30px); display: grid; grid-template-columns: minmax(0, 1fr) clamp(110px, 22%, 190px); gap: clamp(12px, 2vw, 26px); overflow: hidden; box-shadow: var(--shadow); }
+@media (max-width: 520px) { .stage { grid-template-columns: minmax(0, 1fr); } .stage .join { display: none; } }
+.stage .main { min-width: 0; display: flex; flex-direction: column; gap: 12px; overflow: hidden; }
+.stage h1 { margin: 0; font-size: clamp(1.15rem, 2.3vw, 2rem); line-height: 1.15; letter-spacing: -.02em; text-wrap: balance; }
+.stage .muted, .stage .bar-label .n { color: var(--stage-muted); }
+.stage .bar-track { background: var(--stage-track); height: 16px; }
+.stage .bar-label { font-size: clamp(.85rem, 1.3vw, 1.1rem); }
+.stage .answers li { background: var(--stage-track); }
+.stage .question { background: transparent; border-color: var(--stage-track); color: var(--stage-text); }
+.stage .question .meta { color: var(--stage-muted); }
+.stage .badge { background: var(--stage-track); color: var(--stage-muted); }
+.stage .badge.live { background: var(--ok-soft); color: var(--ok); }
+.join { background: var(--surface); color: var(--text); border-radius: 12px; padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; align-self: start; }
+.stage .join .muted { color: var(--muted); }
+.join .code { font-size: clamp(.95rem, 1.5vw, 1.3rem); font-weight: 800; letter-spacing: .06em; max-width: 100%; overflow-wrap: anywhere; color: var(--primary); }
+.join canvas { width: 100%; max-width: 140px; aspect-ratio: 1; image-rendering: pixelated; }
+.leader { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 5px; }
+.leader li { display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 9px; background: var(--stage-track); font-variant-numeric: tabular-nums; }
+
+.toast { position: fixed; left: 50%; bottom: calc(18px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 8px 14px; border-radius: 9px; font-weight: 500; z-index: 20; max-width: calc(100% - 32px); }
+.toast.error { background: var(--danger); color: #fff; }
+@media (prefers-reduced-motion: reduce) { .bar-fill, .cloud span { transition: none; } }
+</style>
+</head>
+<body>
+
+<div class="page">
+  <header class="intro">
+    <div class="brand">Quiz<b>y</b> <span class="muted small" style="font-weight:500">demo interactiv</span></div>
+    <p>Cele trei ecrane ale aplicației, legate între ele: ce faci ca organizator apare pe telefon și pe proiector. Votează de pe telefon sau apasă „Simulează sala” ca să vezi 20 de participanți răspunzând.</p>
+  </header>
+
+  <div class="grid">
+    <section class="col" aria-label="Organizator">
+      <div class="col-head"><span class="label">Organizator</span><span class="badge live" id="online"></span></div>
+      <div class="panel">
+        <div class="row" style="justify-content:space-between">
+          <h2>Sondaje și quiz-uri</h2>
+          <div class="row">
+            <button type="button" id="btn-import">Import în bloc</button>
+            <button type="button" class="primary" id="btn-new">+ Sondaj nou</button>
+          </div>
+        </div>
+        <form id="editor" hidden></form>
+        <div id="polls" style="display:flex;flex-direction:column;gap:8px"></div>
+        <button type="button" id="simulate">Simulează sala (+20 de răspunsuri)</button>
+      </div>
+      <div class="panel">
+        <h2>Ecranul proiectat arată</h2>
+        <div class="screen-switch" id="screen"></div>
+      </div>
+      <div class="panel">
+        <h2>Întrebări din public</h2>
+        <div id="admin-qa" style="display:flex;flex-direction:column;gap:6px"></div>
+      </div>
+    </section>
+
+    <section class="col" aria-label="Participant">
+      <div class="col-head"><span class="label">Telefonul unui participant</span></div>
+      <div class="phone">
+        <div class="phone-top"><strong>Quiz<span style="color:var(--primary)">y</span></strong><span class="small muted">Training NIS2 · Q7K2MX</span></div>
+        <div class="phone-body">
+          <div class="tabs" role="tablist">
+            <button type="button" role="tab" id="tab-poll" aria-selected="true">Sondaj</button>
+            <button type="button" role="tab" id="tab-qa" aria-selected="false">Întrebări</button>
+          </div>
+          <div id="phone"></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="col stage-col" aria-label="Proiector">
+      <div class="col-head"><span class="label">Ecranul de proiecție</span></div>
+      <div class="stage">
+        <div class="main" id="stage"></div>
+        <div class="join">
+          <span class="small muted">Intră pe quizy.ro/e/</span>
+          <span class="code">Q7K2MX</span>
+          <canvas id="qr" width="25" height="25" aria-label="Cod QR decorativ pentru demo"></canvas>
+          <span class="small muted" id="stage-online"></span>
+        </div>
+      </div>
+      <p class="small muted" style="margin:0">În aplicația reală, acesta se deschide pe calculatorul legat la proiector, iar codul QR duce direct la eveniment.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+(() => {
+  const $ = (s) => document.querySelector(s);
+  function h(tag, attrs = {}, ...kids) {
+    const el = document.createElement(tag);
+    for (const [k, v] of Object.entries(attrs || {})) {
+      if (v === undefined || v === null || v === false) continue;
+      if (k === 'class') el.className = v;
+      else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+      else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+      else if (k in el && (typeof v !== 'string' || k === 'value')) el[k] = v;
+      else el.setAttribute(k, v === true ? '' : v);
+    }
+    for (const c of kids.flat(Infinity)) if (c !== null && c !== undefined && c !== false) el.append(c instanceof Node ? c : document.createTextNode(String(c)));
+    return el;
+  }
+  let toastTimer;
+  function toast(msg, err) {
+    document.querySelector('.toast')?.remove();
+    const t = h('div', { class: 'toast' + (err ? ' error' : ''), role: 'status' }, msg);
+    document.body.append(t);
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.remove(), 2600);
+  }
+
+  const TYPES = { choice: 'Alegere multiplă', quiz: 'Quiz', wordcloud: 'Word cloud', open: 'Text liber', rating: 'Evaluare' };
+  const ME = 'eu';
+  const NAMES = ['Ana', 'Mihai', 'Ioana', 'Radu', 'Elena', 'Andrei', 'Maria', 'Vlad', 'Cristina', 'Dan', 'Irina', 'Paul', 'Oana', 'Sorin', 'Diana', 'Alex', 'Bianca', 'Tudor', 'Raluca', 'Victor'];
+  let seq = 1;
+  let fake = 0;
+
+  // ---------- state ----------
+  const state = {
+    screen: 'poll',
+    polls: [],
+    questions: [],
+    online: 37,
+    phoneTab: 'poll',
+  };
+  const poll = (p) => ({ id: seq++, status: 'draft', revealed: false, votes: new Map(), ...p });
+  state.polls.push(
+    poll({ type: 'choice', question: 'Who are you?', options: ['Public authority · CSIRT/SOC', 'Essential or important entity', 'Vendor/MSSP', 'Academia', 'Other'], status: 'live' }),
+    poll({ type: 'quiz', question: 'Ce înseamnă NIS2?', options: ['Directivă UE privind securitatea cibernetică', 'Un standard ISO', 'O lege doar pentru bănci'], correct: [0] }),
+    poll({ type: 'wordcloud', question: 'Un cuvânt despre securitatea în firma ta', maxEntries: 3 }),
+    poll({ type: 'rating', question: 'Cât de utilă a fost sesiunea?', scale: 5 }),
+  );
+  [[0, 9], [1, 14], [2, 5], [3, 3], [4, 2]].forEach(([opt, n]) => { for (let i = 0; i < n; i++) state.polls[0].votes.set('seed' + opt + '-' + i, { v: [opt], name: '', at: 0 }); });
+  state.questions.push(
+    { id: seq++, text: 'Cum aplicăm NIS2 într-un IMM fără echipă IT?', author: 'Ioana', up: new Set(['a', 'b', 'c', 'd', 'e', 'f', 'g']), status: 'visible', hl: false },
+    { id: seq++, text: 'Care sunt termenele de raportare a unui incident?', author: '', up: new Set(['a', 'b', 'c']), status: 'visible', hl: false },
+    { id: seq++, text: 'Furnizorii de cloud intră și ei sub incidență?', author: 'Radu', up: new Set(), status: 'pending', hl: false },
+  );
+
+  const live = () => state.polls.find((p) => p.status === 'live') || null;
+  const shown = () => live() || [...state.polls].filter((p) => p.openedAt).sort((a, b) => b.openedAt - a.openedAt)[0] || null;
+  state.polls[0].openedAt = Date.now();
+
+  function results(p) {
+    const votes = [...p.votes.values()];
+    const out = { voters: votes.length };
+    if (p.type === 'choice' || p.type === 'quiz') {
+      out.counts = p.options.map(() => 0);
+      votes.forEach((x) => x.v.forEach((i) => out.counts[i]++));
+    } else if (p.type === 'rating') {
+      out.counts = Array.from({ length: p.scale }, () => 0);
+      let sum = 0; votes.forEach((x) => { out.counts[x.v[0] - 1]++; sum += x.v[0]; });
+      out.avg = votes.length ? (sum / votes.length).toFixed(2) : '–';
+    } else if (p.type === 'wordcloud') {
+      const m = new Map();
+      votes.forEach((x) => x.v.forEach((w) => { const k = w.toLocaleLowerCase('ro'); const e = m.get(k) || { word: w, count: 0 }; e.count++; m.set(k, e); }));
+      out.words = [...m.values()].sort((a, b) => b.count - a.count).slice(0, 60);
+    } else {
+      out.answers = votes.flatMap((x) => x.v.map((t) => ({ t, name: x.name }))).reverse();
+    }
+    return out;
+  }
+
+  function leaderboard() {
+    const score = new Map();
+    for (const p of state.polls.filter((p) => p.type === 'quiz' && p.revealed)) {
+      for (const [pid, x] of p.votes) {
+        const s = score.get(pid) || { name: pid === ME ? 'Tu' : x.name || 'Anonim', score: 0 };
+        if (p.correct.includes(x.v[0])) s.score += Math.max(500, Math.round(1000 - (x.at - p.openedAt) / 100));
+        score.set(pid, s);
+      }
+    }
+    return [...score.values()].sort((a, b) => b.score - a.score);
+  }
+
+  // ---------- results view (shared) ----------
+  const pct = (n, t) => (t ? Math.round((n / t) * 100) : 0);
+  const COLORS = ['--c1', '--c2', '--c3', '--c4', '--c5', '--c6'];
+  function renderResults(p, { showCorrect = true } = {}) {
+    const r = results(p);
+    if (p.type === 'choice' || p.type === 'quiz') {
+      const total = p.multi ? r.voters : r.counts.reduce((a, b) => a + b, 0);
+      return h('div', { class: 'bars' }, p.options.map((o, i) => h('div', { class: 'bar' + (showCorrect && p.revealed && p.correct?.includes(i) ? ' correct' : '') },
+        h('div', { class: 'bar-label' }, h('span', {}, o, showCorrect && p.revealed && p.correct?.includes(i) ? ' ✓' : ''), h('span', { class: 'n' }, `${pct(r.counts[i], total)}% · ${r.counts[i]}`)),
+        h('div', { class: 'bar-track' }, h('div', { class: 'bar-fill', style: { width: pct(r.counts[i], total) + '%' } })))),
+        h('div', { class: 'small muted' }, `${r.voters} participanți`));
+    }
+    if (p.type === 'rating') {
+      const total = r.counts.reduce((a, b) => a + b, 0);
+      return h('div', { class: 'bars' },
+        h('div', { class: 'row' }, h('span', { class: 'avg' }, r.avg), h('span', { class: 'muted small' }, `din ${p.scale} · ${r.voters} participanți`)),
+        r.counts.map((_, i) => i).reverse().map((i) => h('div', { class: 'bar' },
+          h('div', { class: 'bar-label' }, h('span', {}, `${i + 1} ★`), h('span', { class: 'n' }, `${pct(r.counts[i], total)}% · ${r.counts[i]}`)),
+          h('div', { class: 'bar-track' }, h('div', { class: 'bar-fill', style: { width: pct(r.counts[i], total) + '%' } })))));
+    }
+    if (p.type === 'wordcloud') {
+      if (!r.words.length) return h('div', { class: 'empty' }, 'Încă nu există cuvinte.');
+      const max = r.words[0].count, min = r.words[r.words.length - 1].count;
+      const ordered = []; r.words.forEach((w, i) => (i % 2 ? ordered.push(w) : ordered.unshift(w)));
+      return h('div', { class: 'cloud' }, ordered.map((w) => {
+        const t = max === min ? 1 : (w.count - min) / (max - min);
+        const c = COLORS[[...w.word].reduce((a, ch) => a + ch.charCodeAt(0), 0) % COLORS.length];
+        return h('span', { style: { fontSize: (0.9 + t * 2.2).toFixed(2) + 'em', color: `var(${c})` }, title: String(w.count) }, w.word);
+      }));
+    }
+    if (!r.answers.length) return h('div', { class: 'empty' }, 'Încă nu există răspunsuri.');
+    return h('ul', { class: 'answers' }, r.answers.slice(0, 8).map((a) => h('li', {}, a.t, a.name ? h('div', { class: 'small muted' }, a.name) : null)));
+  }
+
+  // ---------- organizer ----------
+  function renderAdmin() {
+    $('#online').textContent = `● ${state.online} online`;
+    const list = $('#polls');
+    list.replaceChildren(...state.polls.map((p) => {
+      const r = results(p);
+      const isLive = p.status === 'live';
+      return h('div', { class: 'poll-item' + (isLive ? ' live' : '') },
+        h('div', { class: 'row', style: { justifyContent: 'space-between' } },
+          h('div', { class: 'row' },
+            h('span', { class: 'badge' + (isLive ? ' live' : '') }, isLive ? 'Live' : p.status === 'closed' ? 'Închis' : 'Ciornă'),
+            h('span', { class: 'small muted' }, TYPES[p.type])),
+          h('span', { class: 'small muted' }, `${r.voters} răsp.`)),
+        h('div', { class: 'q' }, p.question),
+        h('div', { class: 'row' },
+          isLive
+            ? h('button', { type: 'button', onclick: () => { p.status = 'closed'; update(); } }, '■ Oprește')
+            : h('button', { type: 'button', class: 'primary', onclick: () => start(p) }, p.status === 'closed' ? '▶ Redeschide' : '▶ Pornește'),
+          p.type === 'quiz' ? h('button', { type: 'button', onclick: () => { p.revealed = !p.revealed; update(); if (p.revealed) toast('Răspunsul corect apare pe telefoane și pe ecran.'); } }, p.revealed ? 'Ascunde răspunsul' : 'Dezvăluie răspunsul') : null,
+          h('button', { type: 'button', class: 'ghost danger', onclick: () => { state.polls = state.polls.filter((x) => x !== p); update(); } }, 'Șterge')));
+    }));
+
+    const screens = [['join', 'Codul de intrare'], ['poll', 'Sondajul'], ['qa', 'Întrebările'], ['leaderboard', 'Clasamentul']];
+    $('#screen').replaceChildren(...screens.map(([id, l]) => h('button', { type: 'button', 'aria-pressed': String(state.screen === id), onclick: () => { state.screen = id; update(); } }, l)));
+
+    const qs = [...state.questions].sort((a, b) => (b.status === 'pending') - (a.status === 'pending') || b.up.size - a.up.size);
+    $('#admin-qa').replaceChildren(...(qs.length ? qs.map((q) => h('div', { class: 'question' + (q.hl ? ' hl' : '') },
+      h('div', { class: 'upvote' }, '▲', h('strong', {}, q.up.size)),
+      h('div', { class: 'body' }, q.text,
+        h('div', { class: 'meta' }, q.author || 'Anonim', q.status === 'pending' ? ' · ' : '', q.status === 'pending' ? h('span', { class: 'badge pending' }, 'în așteptare') : null),
+        h('div', { class: 'row', style: { marginTop: '4px' } },
+          q.status === 'pending'
+            ? h('button', { type: 'button', class: 'primary', onclick: () => { q.status = 'visible'; update(); } }, 'Publică')
+            : h('button', { type: 'button', class: q.hl ? 'primary' : '', onclick: () => { const on = !q.hl; state.questions.forEach((x) => { x.hl = false; }); q.hl = on; if (on) state.screen = 'qa'; update(); } }, q.hl ? 'Scoate de pe ecran' : 'Pe ecran'),
+          h('button', { type: 'button', class: 'ghost danger', onclick: () => { state.questions = state.questions.filter((x) => x !== q); update(); } }, 'Șterge'))))) : [h('div', { class: 'empty small' }, 'Nicio întrebare încă.')]));
+  }
+
+  function start(p) {
+    state.polls.forEach((x) => { if (x.status === 'live') x.status = 'closed'; });
+    p.status = 'live'; p.openedAt = Date.now(); state.screen = 'poll'; state.phoneTab = 'poll';
+    update();
+  }
+
+  // editor
+  $('#btn-new').addEventListener('click', () => {
+    const form = $('#editor');
+    const draft = { type: 'choice', question: '', options: 'Da\nNu\nNu știu', correct: 1 };
+    const draw = () => {
+      const opts = draft.type === 'choice' || draft.type === 'quiz';
+      form.replaceChildren(
+        h('div', { class: 'row', style: { justifyContent: 'space-between' } }, h('h3', {}, 'Sondaj nou'), h('button', { type: 'button', class: 'ghost', onclick: () => { form.hidden = true; } }, '✕')),
+        h('label', { class: 'small', for: 'f-type' }, 'Tip'),
+        h('select', { id: 'f-type', onchange: (e) => { draft.type = e.target.value; draw(); } }, Object.entries(TYPES).map(([v, l]) => h('option', { value: v, selected: v === draft.type }, l))),
+        h('label', { class: 'small', for: 'f-q' }, 'Întrebarea'),
+        h('input', { type: 'text', id: 'f-q', value: draft.question, placeholder: 'ex. Ce temă vreți să discutăm?', oninput: (e) => { draft.question = e.target.value; } }),
+        opts ? [h('label', { class: 'small', for: 'f-o' }, 'Opțiuni, câte una pe rând'),
+          h('textarea', { id: 'f-o', rows: 3, value: draft.options, oninput: (e) => { draft.options = e.target.value; } })] : null,
+        draft.type === 'quiz' ? [h('label', { class: 'small', for: 'f-c' }, 'Numărul opțiunii corecte'),
+          h('input', { type: 'text', id: 'f-c', inputmode: 'numeric', value: String(draft.correct), oninput: (e) => { draft.correct = Number(e.target.value); } })] : null,
+        h('div', { class: 'row' }, h('button', { type: 'submit', class: 'primary' }, 'Creează și pornește')));
+    };
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const q = draft.question.trim();
+      if (!q) return toast('Scrie întrebarea.', true);
+      const p = { type: draft.type, question: q };
+      if (draft.type === 'choice' || draft.type === 'quiz') {
+        p.options = draft.options.split('\n').map((s) => s.trim()).filter(Boolean);
+        if (p.options.length < 2) return toast('Adaugă cel puțin două opțiuni.', true);
+      }
+      if (draft.type === 'quiz') {
+        const c = draft.correct - 1;
+        if (!(c >= 0 && c < p.options.length)) return toast('Numărul opțiunii corecte nu există.', true);
+        p.correct = [c];
+      }
+      if (draft.type === 'rating') p.scale = 5;
+      if (draft.type === 'wordcloud') p.maxEntries = 3;
+      if (draft.type === 'open') p.maxEntries = 1;
+      const created = poll(p);
+      state.polls.push(created);
+      form.hidden = true;
+      start(created);
+      toast('Sondajul e live pe telefoane.');
+    };
+    form.className = 'panel'; form.style.boxShadow = 'none';
+    draw(); form.hidden = false; $('#f-q').focus();
+  });
+
+  // bulk import (same rules as the app)
+  const TAGS = [
+    [/^\[(nor|word ?cloud|cuvinte)\]\s*/i, (p) => { p.type = 'wordcloud'; }],
+    [/^\[(text|liber|deschis)\]\s*/i, (p) => { p.type = 'open'; }],
+    [/^\[(multiplu|multi|multiple)\]\s*/i, (p) => { p.multi = true; }],
+    [/^\[(nota|notă|rating|evaluare|stele)(?:\s+(\d+))?\]\s*/i, (p, m) => { p.type = 'rating'; p.scale = Math.min(10, Math.max(3, Number(m[2]) || 5)); }],
+  ];
+  function parsePolls(text) {
+    const out = []; let cur = null;
+    const finish = () => {
+      if (!cur) return;
+      if (cur.options.length) { if (cur.correct.length) cur.type = 'quiz'; else if (!cur.type || cur.type === 'open') cur.type = 'choice'; }
+      else if (!cur.type) cur.type = 'open';
+      if (cur.type !== 'choice' && cur.type !== 'quiz') { delete cur.options; delete cur.correct; }
+      out.push(cur); cur = null;
+    };
+    for (const raw of String(text).split(/\r?\n/)) {
+      const line = raw.trim();
+      if (!line) { finish(); continue; }
+      const opt = line.match(/^([-–•*])\s*(.+)$/);
+      if (opt && cur) { if (opt[1] === '*') cur.correct.push(cur.options.length); cur.options.push(opt[2].trim()); continue; }
+      if (cur && (cur.options.length || TAGS.some(([re]) => re.test(line)))) finish();
+      if (cur) { cur.question += ' ' + line; continue; }
+      cur = { type: null, question: '', options: [], correct: [], multi: false };
+      let q = line.replace(/^(\d+|[a-z])[.)]\s+/i, '');
+      for (let ch = true; ch;) { ch = false; for (const [re, ap] of TAGS) { const m = q.match(re); if (m) { ap(cur, m); q = q.slice(m[0].length); ch = true; } } }
+      q = q.replace(/\s*\[(\d+)\s*s(ec)?\]\s*$/i, '');
+      cur.question = q.trim();
+    }
+    finish();
+    return out;
+  }
+  const EXAMPLE = `Ce temă vreți să aprofundăm?
+- Raportarea incidentelor
+- Managementul riscului
+- Lanțul de aprovizionare
+
+Cine răspunde de NIS2 în organizație?
+* Conducerea
+- Doar departamentul IT
+
+[nor] Primul lucru pe care îl schimbi mâine
+
+[nota 10] Cât de pregătită e firma ta?`;
+  $('#btn-import').addEventListener('click', () => {
+    const form = $('#editor');
+    const area = h('textarea', { id: 'f-import', rows: 10, class: 'mono', value: EXAMPLE });
+    const preview = h('ol', { class: 'small muted', style: { margin: 0, paddingLeft: '1.2rem' } });
+    const upd = () => preview.replaceChildren(...parsePolls(area.value).map((p) => h('li', {}, h('strong', {}, TYPES[p.type]), ' · ', p.question, p.options ? ` · ${p.options.length} opțiuni` : '')));
+    area.addEventListener('input', upd);
+    form.onsubmit = (e) => {
+      e.preventDefault();
+      const list = parsePolls(area.value);
+      const bad = list.findIndex((p) => !p.question || (p.options && p.options.length < 2));
+      if (!list.length) return toast('Nu am găsit nicio întrebare.', true);
+      if (bad >= 0) return toast(`Întrebarea ${bad + 1} are nevoie de text și de cel puțin două opțiuni.`, true);
+      list.forEach((p) => state.polls.push(poll({ ...p, maxEntries: p.type === 'wordcloud' ? 3 : 1 })));
+      form.hidden = true; update();
+      toast(`Am importat ${list.length} întrebări. Apasă „Pornește” pe oricare.`);
+    };
+    form.className = 'panel'; form.style.boxShadow = 'none';
+    form.replaceChildren(
+      h('div', { class: 'row', style: { justifyContent: 'space-between' } }, h('h3', {}, 'Import în bloc'), h('button', { type: 'button', class: 'ghost', onclick: () => { form.hidden = true; } }, '✕')),
+      h('p', { class: 'small muted', style: { margin: 0 } }, 'Rând liber între întrebări. Opțiunile încep cu „-”, cea corectă cu „*” (devine quiz). [nor] = word cloud, [nota 5] = evaluare, fără opțiuni = text liber.'),
+      area, preview, h('div', { class: 'row' }, h('button', { type: 'submit', class: 'primary' }, 'Importă')));
+    upd(); form.hidden = false;
+  });
+
+  // simulated audience
+  const WORDS = ['parole', 'backup', 'instruire', 'MFA', 'inventar', 'actualizări', 'phishing', 'backup', 'MFA', 'proceduri', 'MFA'];
+  const TEXTS = ['Mai multe exemple practice', 'Un model de plan de răspuns', 'Exerciții tabletop', 'Checklist pentru IMM-uri'];
+  $('#simulate').addEventListener('click', () => {
+    const p = live();
+    if (!p) return toast('Pornește întâi un sondaj.', true);
+    for (let i = 0; i < 20; i++) {
+      const id = 'sim' + (fake++);
+      const name = NAMES[fake % NAMES.length];
+      const at = (p.openedAt || Date.now()) + Math.round(Math.random() * 20000);
+      let v;
+      if (p.type === 'choice') v = [Math.random() < 0.45 ? 1 : Math.floor(Math.random() * p.options.length)];
+      else if (p.type === 'quiz') v = [Math.random() < 0.7 ? p.correct[0] : Math.floor(Math.random() * p.options.length)];
+      else if (p.type === 'rating') v = [Math.max(1, Math.min(p.scale, Math.round(p.scale * (0.55 + Math.random() * 0.45))))];
+      else if (p.type === 'wordcloud') v = [WORDS[Math.floor(Math.random() * WORDS.length)]];
+      else v = [TEXTS[Math.floor(Math.random() * TEXTS.length)]];
+      p.votes.set(id, { v, name, at });
+    }
+    state.online += 3;
+    update();
+  });
+
+  // ---------- phone ----------
+  $('#tab-poll').addEventListener('click', () => { state.phoneTab = 'poll'; update(); });
+  $('#tab-qa').addEventListener('click', () => { state.phoneTab = 'qa'; update(); });
+  let typed = '';
+
+  function vote(p, v, append) {
+    const mine = p.votes.get(ME);
+    if (append && mine) mine.v.push(...v); else p.votes.set(ME, { v, name: 'Tu', at: Date.now() });
+    update();
+  }
+
+  function renderPhone() {
+    $('#tab-poll').setAttribute('aria-selected', String(state.phoneTab === 'poll'));
+    $('#tab-qa').setAttribute('aria-selected', String(state.phoneTab === 'qa'));
+    const box = $('#phone');
+    if (state.phoneTab === 'qa') return box.replaceChildren(phoneQa());
+    const p = live();
+    if (!p) return box.replaceChildren(h('div', { class: 'empty' }, h('strong', {}, 'Niciun sondaj activ acum'), h('div', { class: 'small' }, 'Pagina se actualizează singură.')));
+    const mine = p.votes.get(ME)?.v || [];
+    const parts = [h('span', { class: 'badge live', style: { alignSelf: 'flex-start' } }, 'Live'), h('h3', { style: { fontSize: '1.1rem' } }, p.question)];
+    if (p.type === 'choice') {
+      parts.push(...p.options.map((o, i) => h('button', { type: 'button', class: 'option', 'aria-pressed': String(mine.includes(i)), onclick: () => vote(p, [i]) }, o)));
+    } else if (p.type === 'quiz') {
+      const answered = mine.length > 0;
+      parts.push(...p.options.map((o, i) => h('button', {
+        type: 'button', disabled: answered || p.revealed, 'aria-pressed': String(mine[0] === i),
+        class: 'option' + (p.revealed && p.correct.includes(i) ? ' correct' : p.revealed && mine[0] === i ? ' wrong' : ''),
+        onclick: () => vote(p, [i]),
+      }, o)));
+      if (p.revealed) {
+        const ok = answered && p.correct.includes(mine[0]);
+        const me = leaderboard().findIndex((x) => x.name === 'Tu');
+        parts.push(h('div', { class: 'note ' + (ok ? 'ok' : 'bad') }, h('strong', {}, !answered ? 'Nu ai răspuns.' : ok ? 'Corect! 🎉' : 'Greșit.'),
+          me >= 0 ? h('div', { class: 'small' }, `Locul ${me + 1} din ${leaderboard().length}`) : null));
+      } else if (answered) parts.push(h('div', { class: 'note small' }, 'Răspuns înregistrat. Așteaptă dezvăluirea.'));
+      else parts.push(h('div', { class: 'small muted' }, 'Un singur răspuns. Cu cât răspunzi mai repede, cu atât mai multe puncte.'));
+    } else if (p.type === 'rating') {
+      parts.push(h('div', { class: 'stars' }, Array.from({ length: p.scale }, (_, i) => h('button', { type: 'button', 'aria-pressed': String(mine[0] === i + 1), onclick: () => vote(p, [i + 1]) }, i + 1))));
+    } else {
+      const left = p.maxEntries - mine.length;
+      if (mine.length) parts.push(h('ul', { class: 'answers' }, mine.map((m) => h('li', {}, m))));
+      if (left > 0) {
+        const input = h('input', { type: 'text', id: 'phone-text', value: typed, placeholder: p.type === 'wordcloud' ? 'Un cuvânt' : 'Răspunsul tău', oninput: (e) => { typed = e.target.value; } });
+        const f = h('form', { class: 'row', style: { flexWrap: 'nowrap' } }, input, h('button', { type: 'submit', class: 'primary' }, 'Trimite'));
+        f.addEventListener('submit', (e) => { e.preventDefault(); if (!typed.trim()) return; const t = typed.trim(); typed = ''; vote(p, [t], true); });
+        parts.push(f);
+        if (p.maxEntries > 1) parts.push(h('div', { class: 'small muted' }, `Mai poți trimite ${left}.`));
+      } else parts.push(h('div', { class: 'note small' }, 'Mulțumim!'));
+    }
+    if (mine.length && p.type !== 'quiz') parts.push(h('div', { class: 'label' }, 'Rezultate'), renderResults(p));
+    if (p.type === 'quiz' && p.revealed) parts.push(renderResults(p));
+    box.replaceChildren(...parts);
+  }
+
+  let askDraft = '';
+  function phoneQa() {
+    const ta = h('textarea', { id: 'phone-ask', rows: 2, value: askDraft, placeholder: 'Pune o întrebare…', oninput: (e) => { askDraft = e.target.value; } });
+    const f = h('form', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } }, ta, h('button', { type: 'submit', class: 'primary', style: { alignSelf: 'flex-end' } }, 'Trimite'));
+    f.addEventListener('submit', (e) => {
+      e.preventDefault();
+      if (!askDraft.trim()) return;
+      state.questions.push({ id: seq++, text: askDraft.trim(), author: '', up: new Set(), status: 'visible', hl: false, mine: true });
+      askDraft = ''; update(); toast('Întrebarea a fost publicată.');
+    });
+    const qs = state.questions.filter((q) => q.status === 'visible').sort((a, b) => b.hl - a.hl || b.up.size - a.up.size);
+    return h('div', { style: { display: 'flex', flexDirection: 'column', gap: '8px' } }, f,
+      qs.map((q) => h('div', { class: 'question' + (q.hl ? ' hl' : '') },
+        h('button', { type: 'button', class: 'upvote', 'aria-pressed': String(q.up.has(ME)), 'aria-label': 'Votează întrebarea', onclick: () => { q.up.has(ME) ? q.up.delete(ME) : q.up.add(ME); update(); } }, '▲', h('strong', {}, q.up.size)),
+        h('div', { class: 'body' }, q.text, h('div', { class: 'meta' }, q.author || 'Anonim', q.hl ? ' · pe ecran acum' : '')))));
+  }
+
+  // ---------- projector ----------
+  function renderStage() {
+    $('#stage-online').textContent = `${state.online} online`;
+    const box = $('#stage');
+    if (state.screen === 'join') {
+      return box.replaceChildren(h('div', { class: 'muted' }, 'Training NIS2 pentru IMM-uri'), h('h1', {}, 'Scoate telefonul și intră pe quizy.ro/e/Q7K2MX'), h('p', { class: 'muted', style: { margin: 0 } }, 'Sau scanează codul QR din dreapta.'));
+    }
+    if (state.screen === 'qa') {
+      const qs = state.questions.filter((q) => q.status === 'visible').sort((a, b) => b.hl - a.hl || b.up.size - a.up.size);
+      const top = qs.find((q) => q.hl);
+      return box.replaceChildren(h('h1', {}, 'Întrebări din public'),
+        top ? h('div', { style: { fontSize: 'clamp(1rem,2vw,1.6rem)', fontWeight: 700, borderLeft: '4px solid var(--primary)', paddingLeft: '12px' } }, top.text, h('div', { class: 'small muted', style: { fontWeight: 400 } }, `${top.author || 'Anonim'} · ▲ ${top.up.size}`)) : null,
+        qs.filter((q) => !q.hl).slice(0, 4).map((q) => h('div', { class: 'question' }, h('div', { class: 'upvote' }, '▲', h('strong', {}, q.up.size)), h('div', { class: 'body' }, q.text))));
+    }
+    if (state.screen === 'leaderboard') {
+      const lb = leaderboard().slice(0, 6);
+      return box.replaceChildren(h('h1', {}, '🏆 Clasament'), lb.length
+        ? h('ol', { class: 'leader' }, lb.map((x, i) => h('li', {}, h('span', {}, `${i + 1}. ${x.name}`), h('strong', {}, x.score))))
+        : h('p', { class: 'muted' }, 'Clasamentul apare după ce dezvălui răspunsul unui quiz.'));
+    }
+    const p = shown();
+    if (!p) return box.replaceChildren(h('h1', {}, 'Niciun sondaj încă'));
+    const head = h('div', { class: 'row' }, h('span', { class: 'badge' + (p.status === 'live' ? ' live' : '') }, p.status === 'live' ? 'Live' : 'Închis'), h('span', { class: 'small muted' }, TYPES[p.type]));
+    const body = p.type === 'quiz' && !p.revealed
+      ? h('div', { class: 'bars' }, p.options.map((o, i) => h('div', { style: { padding: '8px 12px', borderRadius: '9px', background: 'var(--stage-track)' } }, `${String.fromCharCode(65 + i)}. ${o}`)), h('div', { class: 'small muted' }, `${results(p).voters} au răspuns`))
+      : renderResults(p);
+    box.replaceChildren(head, h('h1', {}, p.question), body);
+  }
+
+  // decorative QR-like pattern (the real app draws a real QR code for the event link)
+  (function drawQr() {
+    const c = $('#qr'), x = c.getContext('2d'), n = 25;
+    x.fillStyle = '#fff'; x.fillRect(0, 0, n, n); x.fillStyle = '#000';
+    let s = 7;
+    const rnd = () => ((s = (s * 9301 + 49297) % 233280) / 233280);
+    const finder = (ox, oy) => { x.fillRect(ox, oy, 7, 7); x.fillStyle = '#fff'; x.fillRect(ox + 1, oy + 1, 5, 5); x.fillStyle = '#000'; x.fillRect(ox + 2, oy + 2, 3, 3); };
+    for (let i = 0; i < n; i++) for (let j = 0; j < n; j++) {
+      const inF = (i < 8 && j < 8) || (i > 16 && j < 8) || (i < 8 && j > 16);
+      if (!inF && rnd() < 0.48) x.fillRect(i, j, 1, 1);
+    }
+    finder(0, 0); finder(18, 0); finder(0, 18);
+  })();
+
+  function update() {
+    const focusId = document.activeElement?.id;
+    renderAdmin(); renderPhone(); renderStage();
+    if (focusId) document.getElementById(focusId)?.focus();
+  }
+  update();
+})();
+</script>
+</body>
+</html>
