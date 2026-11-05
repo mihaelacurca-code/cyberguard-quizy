@@ -35,6 +35,15 @@ test('parses every poll type from pasted text', () => {
   assert.equal(polls[5].question, 'Ce ai învățat azi?');
 });
 
+test('new types: ranking, likert statements, pin', () => {
+  const polls = parsePolls('[clasament] Priorități\n- Backup\n- MFA\n\n[likert 7] Cât de de acord ești?\n- Avem un plan\n- Îl testăm\n\n[pin] Unde e semnul de phishing?');
+  assert.deepEqual(polls.map((p) => p.type), ['ranking', 'scale', 'pin']);
+  assert.deepEqual(polls[0].options, ['Backup', 'MFA']);
+  assert.equal(polls[1].scale, 7);
+  assert.deepEqual(polls[1].options, ['Avem un plan', 'Îl testăm']);
+  assert.equal(polls[2].options, undefined);
+});
+
 test('import is all-or-nothing', () => {
   const store = createStore(openDb(':memory:'));
   const { code } = store.createEvent('Import');

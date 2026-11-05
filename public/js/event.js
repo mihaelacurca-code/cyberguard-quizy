@@ -1,4 +1,4 @@
-import { $, h, toast, storage, store, connect, codeFromPath, renderResults, timeLeft, fill, applyBrand } from './common.js';
+import { $, h, toast, storage, store, connect, codeFromPath, renderResults, timeLeft, fill, applyBrand, pollImage, pinBoard } from './common.js';
 import { t, translatePage, langSwitch } from './i18n.js';
 import { downloadCertificate } from './certificate.js';
 
@@ -252,7 +252,11 @@ function renderPoll() {
   const answered = mine.length > 0;
   const parts = [h('div', { class: 'row between' }, h('span', { class: 'badge live' }, t('Live')), timerEl(p))];
   parts.push(h('h2', { style: { marginTop: '.75rem' } }, p.question));
+  parts.push(pollImage(p));
 
+  if (p.type === 'ranking') parts.push(rankingForm(p, mine));
+  if (p.type === 'scale') parts.push(scaleForm(p, mine));
+  if (p.type === 'pin') parts.push(pinForm(p, mine));
   if (p.type === 'choice') parts.push(choiceForm(p, mine));
   if (p.type === 'quiz') parts.push(quizView(p, mine));
   if (p.type === 'rating') parts.push(ratingForm(p, mine));
@@ -267,6 +271,65 @@ function renderPoll() {
     parts.push(h('p', { class: 'muted', style: { marginTop: '1rem' } }, t('Răspuns trimis. Rezultatele apar pe ecran.')));
   }
   fill(box, ...parts);
+}
+
+// ---------- ranking: reorder with ↑ ↓ (works on any phone, no dragging) ----------
+function rankingForm(p, mine) {
+  let order = mine.length === p.options.length ? [...mine] : p.options.map((_, i) => i);
+  const list = h('ol', { class: 'rank-list' });
+  const draw = () => fill(list, order.map((opt, pos) => h('li', { class: 'rank-item' },
+    h('span', { class: 'rank-pos' }, pos + 1),
+    h('span', { class: 'grow' }, p.options[opt]),
+    h('button', { type: 'button', class: 'sm', 'aria-label': t('Mută mai sus'), disabled: pos === 0 || state.event.settings.closed, onclick: () => { [order[pos - 1], order[pos]] = [order[pos], order[pos - 1]]; draw(); } }, '↑'),
+    h('button', { type: 'button', class: 'sm', 'aria-label': t('Mută mai jos'), disabled: pos === order.length - 1 || state.event.settings.closed, onclick: () => { [order[pos + 1], order[pos]] = [order[pos], order[pos + 1]]; draw(); } }, '↓'))));
+  draw();
+  const btn = h('button', { class: 'primary big', type: 'button', style: { width: '100%', justifyContent: 'center', marginTop: '.8rem' }, disabled: state.event.settings.closed },
+    t(mine.length ? 'Actualizează clasamentul' : 'Trimite clasamentul'));
+  btn.addEventListener('click', () => send(p, order, btn));
+  return h('div', {}, h('p', { class: 'muted small' }, t('Pune opțiunile în ordine, de la cea mai importantă la cea mai puțin importantă.')), list, btn);
+}
+
+// ---------- scale: one row of marks per statement ----------
+function scaleForm(p, mine) {
+  const marks = mine.length === p.options.length ? [...mine] : p.options.map(() => null);
+  const [low, high] = p.labels?.length === 2 && p.labels[0] && p.labels[1] ? p.labels : [t('Deloc de acord'), t('Total de acord')];
+  const btn = h('button', { class: 'primary big', type: 'button', style: { width: '100%', justifyContent: 'center', marginTop: '.8rem' } },
+    t(mine.length ? 'Actualizează răspunsurile' : 'Trimite'));
+  const sync = () => { btn.disabled = marks.some((m) => m === null) || state.event.settings.closed; };
+  const rows = p.options.map((s, i) => {
+    const row = h('div', { class: 'stars scale-marks' });
+    const paint = () => row.querySelectorAll('button').forEach((b, k) => b.setAttribute('aria-pressed', String(marks[i] === k + 1)));
+    for (let k = 1; k <= p.scale; k++) {
+      row.append(h('button', { type: 'button', 'aria-label': `${s}: ${k}`, disabled: state.event.settings.closed, onclick: () => { marks[i] = k; paint(); sync(); } }, k));
+    }
+    paint();
+    return h('div', { class: 'scale-item' }, h('div', { class: 'scale-statement' }, s), row);
+  });
+  btn.addEventListener('click', () => send(p, marks, btn));
+  sync();
+  return h('div', {},
+    h('div', { class: 'scale-legend small muted' }, h('span', {}, `1 = ${low}`), h('span', {}, `${p.scale} = ${high}`)),
+    rows, btn);
+}
+
+// ---------- pin on an image ----------
+function pinForm(p, mine) {
+  let pick = mine.length === 2 ? [...mine] : null;
+  const box = h('div');
+  const locked = p.revealed || state.event.settings.closed;
+  const draw = () => {
+    const inside = p.region && pick ? (pick[0] - p.region.x) ** 2 + (pick[1] - p.region.y) ** 2 <= p.region.r ** 2 : null;
+    const btn = h('button', { class: 'primary big', type: 'button', style: { width: '100%', justifyContent: 'center', marginTop: '.8rem' }, disabled: !pick || locked },
+      t(mine.length ? 'Mută pinul aici' : 'Trimite pinul'));
+    btn.addEventListener('click', () => send(p, pick, btn));
+    fill(box,
+      h('p', { class: 'muted small' }, locked ? '' : t('Atinge imaginea ca să pui pinul. Îl poți muta până la dezvăluire.')),
+      pinBoard({ ...p, results: null }, { mine: pick, onPick: locked ? null : (xy) => { pick = xy; draw(); } }),
+      p.revealed && p.region ? h('div', { class: `note ${inside ? 'ok' : 'bad'}`, style: { marginTop: '.6rem' } }, h('strong', {}, !pick ? t('Nu ai pus niciun pin.') : inside ? t('Ai nimerit zona corectă! 🎯') : t('Pinul tău e în afara zonei corecte.'))) : null,
+      locked ? null : btn);
+  };
+  draw();
+  return box;
 }
 
 let timerInterval;

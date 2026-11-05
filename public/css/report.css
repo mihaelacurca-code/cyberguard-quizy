@@ -88,6 +88,12 @@ tr { break-inside: avoid; }
 
 .foot { margin-top: 2rem; padding-top: .6rem; border-top: 1px solid var(--line); color: var(--muted); font-size: .78rem; display: flex; justify-content: space-between; gap: 1rem; flex-wrap: wrap; }
 
+.qimg { display: block; max-width: 60%; max-height: 220px; margin: 0 0 .6rem; border-radius: 6px; border: 1px solid var(--line); }
+.pin-board { position: relative; max-width: 70%; line-height: 0; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.pin-board img { width: 100%; display: block; }
+.pin { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; background: var(--accent); border: 1.5px solid #fff; opacity: .8; }
+.pin-region { position: absolute; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; border: 2px dashed var(--ok); background: rgb(20 138 92 / 15%); }
+
 @media (max-width: 600px) {
   .doc { padding: 1.2rem 1rem; }
   .answers { columns: 1; }

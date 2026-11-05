@@ -7,6 +7,8 @@ const LABELS = {
   'Opțiunea': 'The option',
   'Răspunsul': 'The answer',
   'Emitentul': 'The issuer',
+  'Afirmația': 'The statement',
+  'Eticheta': 'The label',
 };
 
 const label = (ro) => LABELS[ro] || ro;
@@ -30,6 +32,7 @@ const RULES = [
   [/^(.+) lipsește\.$/, (m) => `${label(m[1])} is missing.`],
   [/^(.+) poate avea cel mult (\d+) caractere\.$/, (m) => `${label(m[1])} can be at most ${m[2]} characters.`],
   [/^Cel mult (\d+) opțiuni\.$/, (m) => `At most ${m[1]} options.`],
+  [/^Cel mult (\d+) afirmații\.$/, (m) => `At most ${m[1]} statements.`],
   [/^Poți trimite cel mult (\d+) răspunsuri\.$/, (m) => `You can send at most ${m[1]} answers.`],
   [/^Certificatul cere cel puțin (\d+)% la testul final\.$/, (m) => `The certificate requires at least ${m[1]}% on the final test.`],
 ];
@@ -98,6 +101,16 @@ const EXACT = {
   'Nimeni n-a votat încă. Alege tu ramura sau așteaptă voturile.': 'Nobody has voted yet. Choose the branch yourself or wait for votes.',
   'Scenariul s-a încheiat.': 'The scenario has ended.',
   'Ești deja la primul pas.': 'You are already at the first step.',
+  'Adaugă cel puțin o afirmație.': 'Add at least one statement.',
+  'Zona corectă nu este validă.': 'The correct area is not valid.',
+  'Imaginea trebuie să fie PNG, JPG sau WebP.': 'The image must be PNG, JPG or WebP.',
+  'Imaginea poate avea cel mult 1 MB.': 'The image can be at most 1 MB.',
+  'Încarcă întâi imaginea pe care participanții pun pinul.': 'Upload the image participants will pin first.',
+  'Doar quiz-urile și pinurile cu zonă marcată au răspuns corect.': 'Only quizzes and pins with a marked area have a correct answer.',
+  'Ordonează toate opțiunile.': 'Put all the options in order.',
+  'Dă o notă fiecărei afirmații.': 'Rate every statement.',
+  'Zona corectă a fost deja dezvăluită.': 'The correct area has already been revealed.',
+  'Atinge imaginea ca să pui pinul.': 'Tap the image to place your pin.',
   'Culoarea trebuie să fie de forma #1a2b3c.': 'The color must look like #1a2b3c.',
   'Fundal necunoscut.': 'Unknown background.',
   'Logo-ul trebuie să fie o imagine PNG, JPG sau WebP.': 'The logo must be a PNG, JPG or WebP image.',

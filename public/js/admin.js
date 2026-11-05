@@ -3,7 +3,7 @@ import { t as tr, lang, translatePage, langSwitch } from './i18n.js';
 
 translatePage();
 $('#lang-slot').replaceWith(langSwitch());
-import { $, h, toast, storage, store, connect, codeFromPath, renderResults, TYPE_LABELS, votersLabel, copy, fill, applyBrand } from './common.js';
+import { $, h, toast, storage, store, connect, codeFromPath, renderResults, TYPE_LABELS, votersLabel, copy, fill, applyBrand, pollImageUrl, pinBoard } from './common.js';
 
 const code = codeFromPath();
 const hashKey = new URLSearchParams(location.hash.slice(1)).get('key');
@@ -132,6 +132,10 @@ function renderPolls() {
         ? h('button', { class: 'sm', type: 'button', onclick: () => act('poll:status', { id: p.id, status: 'closed' }) }, tr('■ Oprește'))
         : h('button', { class: 'sm primary', type: 'button', onclick: () => act('poll:status', { id: p.id, status: 'live' }) }, tr(p.status === 'closed' ? '▶ Redeschide' : '▶ Pornește')),
     ];
+    if (p.type === 'pin' && p.region) {
+      actions.push(h('button', { class: 'sm', type: 'button', onclick: () => act('poll:reveal', { id: p.id, revealed: !p.revealed }) },
+        tr(p.revealed ? 'Ascunde zona corectă' : 'Dezvăluie zona corectă')));
+    }
     if (p.type === 'quiz') {
       actions.push(h('button', { class: 'sm', type: 'button', onclick: () => act('poll:reveal', { id: p.id, revealed: !p.revealed }) },
         tr(p.revealed ? 'Ascunde răspunsul' : 'Dezvăluie răspunsul')));
@@ -322,6 +326,7 @@ $('#import-polls').addEventListener('click', () => {
         h('li', {}, tr('Opțiunile încep cu „-”. Opțiunea corectă cu „*” → devine quiz. „[30s]” la finalul întrebării = cronometru.')),
         h('li', {}, tr('„[multiplu]” = se pot alege mai multe opțiuni.')),
         h('li', {}, tr('„[nor]” = word cloud, „[nota 5]” sau „[nota 10]” = evaluare.')),
+        h('li', {}, tr('„[clasament]” = participanții ordonează opțiunile; „[likert]” = fiecare opțiune devine o afirmație notată 1–5; „[pin]” = pin pe imagine (imaginea o adaugi apoi din „Editează”).')),
         h('li', {}, tr('Întrebare fără opțiuni = răspuns liber.'))),
       h('button', { type: 'button', class: 'sm', onclick: () => { area.value = EXAMPLE; update(); } }, tr('Pune exemplul'))),
     area, preview,
@@ -339,12 +344,22 @@ function openEditor(poll) {
   const form = $('#editor');
   const draft = poll
     ? { type: poll.type, question: poll.question, options: [...(poll.options || ['', ''])], multi: poll.multi, correct: [...(poll.correct || [])],
-      scale: poll.scale || 5, maxEntries: poll.maxEntries || 3, timeLimit: poll.timeLimit || 0, showResults: poll.showResults }
-    : { type: 'choice', question: '', options: ['', ''], multi: false, correct: [], scale: 5, maxEntries: 3, timeLimit: 20, showResults: true };
+      scale: poll.scale || 5, maxEntries: poll.maxEntries || 3, timeLimit: poll.timeLimit || 0, showResults: poll.showResults,
+      labels: [...(poll.labels || ['', ''])], region: poll.region || null }
+    : { type: 'choice', question: '', options: ['', ''], multi: false, correct: [], scale: 5, maxEntries: 3, timeLimit: 20, showResults: true, labels: ['', ''], region: null };
+  // The image travels separately: chosen here, uploaded after the poll is saved.
+  let imageFile = null;
+  let imagePreview = poll?.image ? pollImageUrl(poll) : '';
+  let removeImage = false;
 
   const draw = () => {
     const t = draft.type;
-    const typeSelect = h('select', { id: 'f-type', onchange: (e) => { draft.type = e.target.value; if (draft.type === 'open') draft.maxEntries = 1; draw(); } },
+    const typeSelect = h('select', { id: 'f-type', onchange: (e) => {
+      draft.type = e.target.value;
+      if (draft.type === 'open') draft.maxEntries = 1;
+      if (draft.type === 'scale' && draft.scale > 7) draft.scale = 5;
+      draw();
+    } },
       Object.entries(TYPE_LABELS).map(([v, l]) => h('option', { value: v, selected: v === t }, l)));
     const parts = [
       h('div', { class: 'row between' }, h('h2', { style: { margin: 0 } }, tr(poll ? 'Editează sondajul' : 'Sondaj nou')),
@@ -353,24 +368,65 @@ function openEditor(poll) {
       h('div', {}, h('label', { for: 'f-q' }, tr('Întrebarea')),
         h('textarea', { id: 'f-q', maxlength: '300', required: true, value: draft.question, oninput: (e) => { draft.question = e.target.value; } })),
     ];
-    if (t === 'choice' || t === 'quiz') {
+    if (t === 'choice' || t === 'quiz' || t === 'ranking' || t === 'scale') {
+      const isScale = t === 'scale';
+      const min = isScale ? 1 : 2;
+      const max = t === 'ranking' || isScale ? 10 : 20;
       parts.push(h('div', {},
-        h('label', {}, tr(t === 'quiz' ? 'Opțiuni (bifează răspunsul corect)' : 'Opțiuni')),
+        h('label', {}, tr(t === 'quiz' ? 'Opțiuni (bifează răspunsul corect)' : isScale ? 'Afirmații' : t === 'ranking' ? 'Opțiuni de ordonat' : 'Opțiuni')),
         draft.options.map((o, i) => h('div', { class: 'opt-row' },
           t === 'quiz' ? h('input', {
             type: 'checkbox', class: 'correct-toggle', checked: draft.correct.includes(i), 'aria-label': tr('Opțiunea {n} e corectă', { n: i + 1 }),
             onchange: (e) => { draft.correct = e.target.checked ? [...draft.correct, i] : draft.correct.filter((x) => x !== i); },
           }) : null,
-          h('input', { type: 'text', maxlength: '120', value: o, placeholder: tr('Opțiunea {n}', { n: i + 1 }), oninput: (e) => { draft.options[i] = e.target.value; } }),
+          h('input', { type: 'text', maxlength: isScale ? '200' : '120', value: o, placeholder: tr(isScale ? 'Afirmația {n}' : 'Opțiunea {n}', { n: i + 1 }), oninput: (e) => { draft.options[i] = e.target.value; } }),
           h('button', {
-            type: 'button', class: 'sm ghost', disabled: draft.options.length <= 2, 'aria-label': tr('Elimină opțiunea'),
+            type: 'button', class: 'sm ghost', disabled: draft.options.length <= min, 'aria-label': tr('Elimină opțiunea'),
             onclick: () => {
               draft.options.splice(i, 1);
               draft.correct = draft.correct.filter((x) => x !== i).map((x) => (x > i ? x - 1 : x));
               draw();
             },
           }, '✕'))),
-        h('button', { type: 'button', class: 'sm', disabled: draft.options.length >= 20, onclick: () => { draft.options.push(''); draw(); } }, tr('+ Opțiune'))));
+        h('button', { type: 'button', class: 'sm', disabled: draft.options.length >= max, onclick: () => { draft.options.push(''); draw(); } }, tr(isScale ? '+ Afirmație' : '+ Opțiune'))));
+    }
+    if (t === 'scale') {
+      parts.push(h('div', {}, h('label', { for: 'f-scale' }, tr('Scală')),
+        h('select', { id: 'f-scale', onchange: (e) => { draft.scale = Number(e.target.value); } },
+          [3, 5, 7].map((n) => h('option', { value: n, selected: n === draft.scale }, `1 – ${n}`)))));
+      parts.push(h('div', { class: 'row', style: { flexWrap: 'nowrap' } },
+        h('div', { class: 'grow' }, h('label', { for: 'f-low' }, tr('Eticheta pentru 1')),
+          h('input', { id: 'f-low', type: 'text', maxlength: '40', value: draft.labels[0], placeholder: tr('Deloc de acord'), oninput: (e) => { draft.labels[0] = e.target.value; } })),
+        h('div', { class: 'grow' }, h('label', { for: 'f-high' }, tr('Eticheta pentru maxim')),
+          h('input', { id: 'f-high', type: 'text', maxlength: '40', value: draft.labels[1], placeholder: tr('Total de acord'), oninput: (e) => { draft.labels[1] = e.target.value; } }))));
+    }
+    // image: optional for every type, required for a pin
+    const fileInput = h('input', { type: 'file', id: 'f-image', accept: 'image/png,image/jpeg,image/webp', hidden: true, onchange: (e) => {
+      const f = e.target.files[0];
+      if (!f) return;
+      if (f.size > 1024 * 1024) { toast(tr('Imaginea poate avea cel mult 1 MB.'), true); return; }
+      imageFile = f; removeImage = false; imagePreview = URL.createObjectURL(f); draw();
+    } });
+    parts.push(h('div', { class: 'stack' },
+      h('label', {}, tr(t === 'pin' ? 'Imaginea pe care participanții pun pinul' : 'Imagine (opțional)')),
+      imagePreview && t !== 'pin' ? h('img', { class: 'poll-image', src: imagePreview, alt: '' }) : null,
+      h('div', { class: 'row' },
+        h('label', { class: 'btn sm', for: 'f-image' }, tr(imagePreview ? 'Schimbă imaginea' : 'Alege imaginea')), fileInput,
+        imagePreview && t !== 'pin' ? h('button', { type: 'button', class: 'sm ghost danger', onclick: () => { imageFile = null; imagePreview = ''; removeImage = true; draw(); } }, tr('Fără imagine')) : null),
+      h('p', { class: 'small muted', style: { margin: 0 } }, tr('PNG, JPG sau WebP, cel mult 1 MB.'))));
+    if (t === 'pin') {
+      if (imagePreview) {
+        parts.push(h('div', { class: 'stack' },
+          h('label', {}, tr('Zona corectă (opțional)')),
+          h('p', { class: 'small muted', style: { margin: 0 } }, tr('Atinge imaginea în locul corect. Participanții văd zona doar după ce o dezvălui.')),
+          pinBoard({ type: 'pin', region: draft.region, results: null }, { src: imagePreview, onPick: ([x, y]) => { draft.region = { x, y, r: draft.region?.r || 0.08 }; draw(); } }),
+          draft.region ? h('div', { class: 'row' },
+            h('label', { for: 'f-radius', style: { margin: 0 } }, tr('Mărimea zonei')),
+            h('input', { id: 'f-radius', type: 'range', min: '2', max: '40', value: String(Math.round(draft.region.r * 100)), class: 'grow', oninput: (e) => { draft.region = { ...draft.region, r: Number(e.target.value) / 100 }; draw(); $('#f-radius')?.focus(); } }),
+            h('button', { type: 'button', class: 'sm ghost', onclick: () => { draft.region = null; draw(); } }, tr('Fără zonă corectă'))) : null));
+      } else {
+        parts.push(h('p', { class: 'note small' }, tr('Alege imaginea, apoi poți marca zona corectă pe ea.')));
+      }
     }
     if (t === 'choice') {
       parts.push(h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: draft.multi, onchange: (e) => { draft.multi = e.target.checked; } }), tr('Se pot alege mai multe opțiuni')));
@@ -398,15 +454,32 @@ function openEditor(poll) {
     fill(form, ...parts);
   };
 
+  const uploadImage = async (id) => {
+    const headers = { 'X-Lang': lang };
+    if (key) headers['X-Admin-Key'] = key;
+    const url = `/api/events/${encodeURIComponent(state.event.code)}/polls/${id}/image`;
+    if (imageFile) {
+      const res = await fetch(url, { method: 'POST', headers: { ...headers, 'Content-Type': imageFile.type }, body: imageFile });
+      if (!res.ok) { toast((await res.json().catch(() => ({}))).error || tr('Ceva n-a mers. Încearcă din nou.'), true); return false; }
+    } else if (removeImage && poll?.image) {
+      await fetch(url, { method: 'DELETE', headers });
+    }
+    return true;
+  };
+
   const save = async (start = false) => {
-    const payload = { ...draft };
+    if (draft.type === 'pin' && !imagePreview) return toast(tr('Alege întâi imaginea pe care participanții pun pinul.'), true);
+    const payload = { ...draft, region: draft.type === 'pin' ? draft.region : undefined };
+    let id = poll?.id;
     if (poll) {
       if (!await act('poll:update', { id: poll.id, poll: payload })) return;
     } else {
       const created = await act('poll:create', { poll: payload });
       if (!created) return;
-      if (start) await act('poll:status', { id: created.id, status: 'live' });
+      id = created.id;
     }
+    if (!await uploadImage(id)) return;
+    if (start) await act('poll:status', { id, status: 'live' });
     form.classList.add('hidden');
     toast(tr('Salvat.'));
   };

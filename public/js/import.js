@@ -17,6 +17,9 @@ const TAGS = [
   [/^\[(nor|cloud|word ?cloud|cuvinte|words)\]\s*/i, (p) => { p.type = 'wordcloud'; }],
   [/^\[(text|liber|deschis|open)\]\s*/i, (p) => { p.type = 'open'; }],
   [/^\[(multiplu|multi|multiple)\]\s*/i, (p) => { p.multi = true; }],
+  [/^\[(clasament|ordine|ranking|rank)\]\s*/i, (p) => { p.type = 'ranking'; }],
+  [/^\[(likert|afirmații|afirmatii|statements)(?:\s+(\d+))?\]\s*/i, (p, m) => { p.type = 'scale'; p.scale = Number(m[2]) || 5; }],
+  [/^\[(pin|imagine|image)\]\s*/i, (p) => { p.type = 'pin'; }],
   [/^\[(nota|notă|rating|evaluare|stele|stars|scale)(?:\s+(\d+))?\]\s*/i, (p, m) => { p.type = 'rating'; p.scale = Number(m[2]) || 5; }],
 ];
 
@@ -25,13 +28,16 @@ export function parsePolls(text) {
   let cur = null;
   const finish = () => {
     if (!cur) return;
+    const listTypes = ['ranking', 'scale'];
     if (cur.options.length) {
-      if (cur.correct.length) cur.type = 'quiz';
+      if (listTypes.includes(cur.type)) cur.correct = [];
+      else if (cur.correct.length) cur.type = 'quiz';
       else if (!cur.type || cur.type === 'open') cur.type = 'choice';
     } else if (!cur.type) {
       cur.type = 'open';
     }
-    if (cur.type !== 'choice' && cur.type !== 'quiz') { delete cur.options; delete cur.correct; }
+    if (!['choice', 'quiz', ...listTypes].includes(cur.type)) { delete cur.options; delete cur.correct; }
+    if (listTypes.includes(cur.type)) delete cur.correct;
     if (cur.type === 'wordcloud') cur.maxEntries = 3;
     if (cur.type === 'open') cur.maxEntries = 1;
     if (cur.type === 'quiz') { delete cur.multi; cur.timeLimit ??= 0; } else delete cur.timeLimit;

@@ -16,6 +16,10 @@ Sondaje live, quiz-uri și întrebări din public pentru evenimente — o altern
 | **Quiz** | Răspuns corect marcat, cronometru opțional, punctaj după viteză (500–1000 puncte), dezvăluire la comanda organizatorului, clasament |
 | **Word cloud** | 1–10 cuvinte per participant, cuvintele identice se cumulează indiferent de majuscule |
 | **Text liber** | Răspunsuri deschise, 1–10 per participant |
+| **Clasament de opțiuni** | Participanții ordonează opțiunile cu ↑ ↓; rezultatul e ordinea sălii (metoda Borda), cu poziția medie a fiecărei opțiuni |
+| **Scală cu afirmații** | Mai multe afirmații notate 1–3, 1–5 sau 1–7, cu etichete la capete („Deloc de acord” … „Total de acord”); media și distribuția pe fiecare afirmație |
+| **Pin pe imagine** | Participanții ating un punct pe o imagine (de ex. un e-mail de phishing). Opțional, o zonă corectă, arătată la dezvăluire, cu procentul celor care au nimerit-o |
+| **Imagini în întrebări** | Orice întrebare poate avea o imagine (PNG, JPG sau WebP, până la 1 MB), pe telefoane, pe proiector și în raport |
 | **Evaluare** | Scală 1–3, 1–5, 1–7 sau 1–10, cu medie și distribuție |
 | **Q&A** | Întrebări din public (cu nume sau anonim), voturi, sortare populare/recente, moderare înainte de publicare, „pe ecran”, marcat ca răspuns, arhivare |
 | **Ecran de proiecție** | Cod de intrare + QR, rezultate live, întrebarea evidențiată, clasament; organizatorul alege ce se vede |
@@ -81,6 +85,9 @@ Ce ai învățat azi?
 | `[multiplu]` în fața întrebării | se pot alege mai multe opțiuni |
 | o opțiune marcată cu `*` | quiz; `*` = răspunsul corect; `[30s]` la final = cronometru |
 | `[nor]` | word cloud |
+| `[clasament]` + rânduri cu `-` | clasament de opțiuni |
+| `[likert]` sau `[likert 7]` + rânduri cu `-` | scală cu afirmații (fiecare rând e o afirmație) |
+| `[pin]` | pin pe imagine (imaginea o adaugi apoi din „Editează”) |
 | `[nota 5]`, `[nota 10]` | evaluare pe scala respectivă |
 | întrebare fără opțiuni | răspuns liber |
 

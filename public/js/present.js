@@ -1,4 +1,4 @@
-import { $, h, connect, codeFromPath, renderResults, timeLeft, votersLabel, TYPE_LABELS, fill, applyBrand } from './common.js';
+import { $, h, connect, codeFromPath, renderResults, timeLeft, votersLabel, TYPE_LABELS, fill, applyBrand, pollImage } from './common.js';
 import { t, translatePage, langSwitch } from './i18n.js';
 
 translatePage();
@@ -98,7 +98,7 @@ function pollView() {
   } else {
     body = renderResults(p);
   }
-  return h('div', {}, head, h('h1', {}, p.question), body);
+  return h('div', {}, head, h('h1', {}, p.question), pollImage(p, 'poll-image big'), body);
 }
 
 function timerEl(p) {

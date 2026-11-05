@@ -337,3 +337,32 @@ img.client-logo[hidden] { display: none !important; }
 .brand-preview img { max-height: 56px; max-width: 200px; background: var(--surface-2); border-radius: 8px; padding: 6px; }
 .swatch-row { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; }
 .swatch-row input[type=color] { width: 52px; height: 40px; padding: 2px; border-radius: 10px; border: 1px solid var(--border); background: transparent; cursor: pointer; }
+
+/* ---------- ranking, scale, pin, poll images ---------- */
+.note { border-radius: 11px; padding: .7rem .9rem; background: var(--surface-2); }
+.note.ok { background: var(--ok-soft); }
+.note.bad { background: var(--danger-soft); }
+.poll-image { display: block; max-width: 100%; max-height: 50vh; margin: .2rem auto 1rem; border-radius: 10px; border: 1px solid var(--border); object-fit: contain; }
+.poll-image.big { max-height: 38vh; }
+.rank-list { list-style: none; margin: .5rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .45rem; }
+.rank-item { display: flex; align-items: center; gap: .6rem; padding: .55rem .6rem; border: 1px solid var(--border); border-radius: 11px; background: var(--surface); }
+.rank-pos { width: 1.8rem; height: 1.8rem; display: grid; place-items: center; border-radius: 50%; background: var(--primary-soft); color: var(--primary-strong); font-weight: 800; flex: none; }
+.scale-item { padding: .6rem 0; border-top: 1px solid var(--border); }
+.scale-statement { font-weight: 600; margin-bottom: .45rem; }
+.scale-legend { display: flex; justify-content: space-between; gap: 1rem; margin: .3rem 0 .5rem; }
+.scale-row { margin-bottom: .7rem; }
+.scale-head { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; font-weight: 500; }
+.scale-stack { display: flex; height: 22px; border-radius: 7px; overflow: hidden; background: var(--surface-2); margin-top: .3rem; }
+.present-main .scale-head { font-size: clamp(1rem, 1.8vw, 1.5rem); }
+.present-main .scale-stack { height: 32px; }
+.present-main .scale-row { margin-bottom: 1.1rem; }
+.scale-stack .seg { background: var(--primary); color: var(--primary-ink); font-size: .72rem; font-weight: 800; display: grid; place-items: center; min-width: 0; }
+.avg-badge { font-weight: 800; color: var(--primary-strong); font-variant-numeric: tabular-nums; }
+.pin-board { position: relative; display: block; width: 100%; max-width: 900px; margin: .4rem auto; border-radius: 10px; overflow: hidden; border: 1px solid var(--border); line-height: 0; user-select: none; -webkit-user-select: none; }
+.pin-board img { display: block; width: 100%; height: auto; }
+.pin-board.pickable { cursor: crosshair; touch-action: manipulation; }
+.pin { position: absolute; width: 14px; height: 14px; margin: -7px 0 0 -7px; border-radius: 50%; background: var(--primary-strong); border: 2px solid #fff; opacity: .75; box-shadow: 0 0 8px var(--glow-color); pointer-events: none; }
+.pin.mine { width: 24px; height: 24px; margin: -12px 0 0 -12px; background: var(--warn); opacity: 1; box-shadow: 0 0 0 4px rgb(0 0 0 / 35%); }
+.pin-region { position: absolute; aspect-ratio: 1; transform: translate(-50%, -50%); border-radius: 50%; border: 3px dashed var(--ok); background: rgb(51 230 168 / 18%); pointer-events: none; }
+.present-main .pin-board { max-width: min(100%, 120vh); }
+.present-main .pin { width: 18px; height: 18px; margin: -9px 0 0 -9px; }

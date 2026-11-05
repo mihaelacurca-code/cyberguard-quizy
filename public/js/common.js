@@ -94,7 +94,36 @@ export const TYPE_LABELS = {
   wordcloud: t('Word cloud'),
   open: t('Text liber'),
   rating: t('Evaluare'),
+  ranking: t('Clasament de opțiuni'),
+  scale: t('Scală cu afirmații'),
+  pin: t('Pin pe imagine'),
 };
+
+// Image attached to a poll; served per event, versioned by upload time.
+export const pollImageUrl = (poll, code = codeFromPath()) => (poll?.image ? `/media/${encodeURIComponent(code)}/poll/${poll.id}?v=${poll.image}` : '');
+
+export const pollImage = (poll, cls = 'poll-image') => (poll?.image && poll.type !== 'pin' ? h('img', { class: cls, src: pollImageUrl(poll), alt: '' }) : null);
+
+// The image with every pin on it, plus the correct area once revealed.
+export function pinBoard(poll, { mine = null, onPick = null, showPins = true, src = '' } = {}) {
+  const r = poll.results;
+  const board = h('div', { class: `pin-board${onPick ? ' pickable' : ''}` },
+    h('img', { src: src || pollImageUrl(poll), alt: '', draggable: false }));
+  if (showPins && r?.pins) for (const [x, y] of r.pins) board.append(h('span', { class: 'pin', style: { left: `${x * 100}%`, top: `${y * 100}%` } }));
+  if (poll.region) {
+    board.append(h('span', { class: 'pin-region', style: {
+      left: `${poll.region.x * 100}%`, top: `${poll.region.y * 100}%`, width: `${poll.region.r * 200}%`,
+    } }));
+  }
+  if (mine) board.append(h('span', { class: 'pin mine', style: { left: `${mine[0] * 100}%`, top: `${mine[1] * 100}%` } }));
+  if (onPick) {
+    board.addEventListener('click', (e) => {
+      const rect = board.getBoundingClientRect();
+      onPick([Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width)), Math.min(1, Math.max(0, (e.clientY - rect.top) / rect.height))]);
+    });
+  }
+  return board;
+}
 
 const pct = (n, total) => (total ? Math.round((n / total) * 100) : 0);
 export const votersLabel = (n) => plural(n, 'participant');
@@ -144,6 +173,36 @@ export function renderResults(poll) {
         h('ul', { class: 'answers' }, r.answers.map((a) => h('li', {}, a.text, a.name ? h('div', { class: 'who' }, a.name) : null))),
         h('p', { class: 'muted small' }, `${plural(r.responses, 'answer')} · ${votersLabel(r.voters)}`));
     }
+  }
+  if (poll.type === 'ranking') {
+    if (!r.voters) return h('p', { class: 'empty' }, t('Încă nu există răspunsuri.'));
+    return h('div', { class: 'bars' },
+      r.ranking.map((row, i) => h('div', { class: `bar${i === 0 ? ' correct' : ''}` },
+        h('div', { class: 'bar-label' }, h('span', {}, `${i + 1}. ${poll.options[row.option]}`), h('span', { class: 'n' }, t('loc mediu {avg}', { avg: row.average }))),
+        h('div', { class: 'bar-track' }, h('div', { class: 'bar-fill', style: { width: `${pct(row.points, r.maxPoints)}%` } })))),
+      h('p', { class: 'muted small' }, votersLabel(r.voters)));
+  }
+  if (poll.type === 'scale') {
+    const [low, high] = poll.labels?.length === 2 && poll.labels[0] && poll.labels[1] ? poll.labels : [t('Deloc de acord'), t('Total de acord')];
+    return h('div', { class: 'scale-results' },
+      h('div', { class: 'scale-legend small muted' }, h('span', {}, `1 = ${low}`), h('span', {}, `${poll.scale} = ${high}`)),
+      poll.options.map((s, i) => {
+        const st = r.statements[i];
+        const total = st.counts.reduce((a, b) => a + b, 0);
+        return h('div', { class: 'scale-row' },
+          h('div', { class: 'scale-head' }, h('span', {}, s), h('span', { class: 'avg-badge' }, st.average ?? '–')),
+          h('div', { class: 'scale-stack' }, st.counts.map((n, k) => (n ? h('span', {
+            class: 'seg', title: `${k + 1}: ${n}`,
+            style: { width: `${pct(n, total)}%`, opacity: String(0.25 + (0.75 * k) / Math.max(1, poll.scale - 1)) },
+          }, pct(n, total) >= 8 ? String(k + 1) : '') : null))));
+      }),
+      h('p', { class: 'muted small' }, votersLabel(r.voters)));
+  }
+  if (poll.type === 'pin') {
+    return h('div', {},
+      pinBoard(poll),
+      h('p', { class: 'muted small' }, votersLabel(r.voters),
+        r.inside !== undefined && poll.region ? ` · ${t('{p}% au nimerit zona corectă', { p: pct(r.inside, r.voters) })}` : ''));
   }
   return h('div');
 }

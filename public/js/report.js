@@ -1,4 +1,4 @@
-import { $, h, fill, storage, codeFromPath, TYPE_LABELS } from './common.js';
+import { $, h, fill, storage, codeFromPath, TYPE_LABELS, pollImageUrl } from './common.js';
 import { t, lang, plural, translatePage, langSwitch } from './i18n.js';
 
 translatePage();
@@ -48,6 +48,20 @@ function pollBlock(p, i) {
     const total = r.counts.reduce((a, b) => a + b, 0);
     body.push(h('p', {}, h('span', { class: 'avg' }, r.average ?? '–'), h('span', { class: 'n' }, t('medie, din {scale}', { scale: p.scale }))));
     body.push(r.counts.map((_, k) => k).reverse().map((k) => bar(`${k + 1} ★`, r.counts[k], total)));
+  } else if (p.type === 'ranking') {
+    body.push(r.ranking.map((row, k) => bar(`${k + 1}. ${p.options[row.option]}`, row.points, r.maxPoints, { correct: k === 0, valueText: t('loc mediu {avg}', { avg: row.average }) })));
+  } else if (p.type === 'scale') {
+    body.push(h('table', {},
+      h('thead', {}, h('tr', {}, h('th', {}, t('Afirmație')), h('th', { class: 'num' }, t('Media')), ...Array.from({ length: p.scale }, (_, k) => h('th', { class: 'num' }, k + 1)))),
+      h('tbody', {}, p.options.map((s, k) => h('tr', {},
+        h('td', {}, s), h('td', { class: 'num' }, h('strong', {}, r.statements[k].average ?? '–')),
+        ...r.statements[k].counts.map((n) => h('td', { class: 'num' }, n)))))));
+  } else if (p.type === 'pin') {
+    const board = h('div', { class: 'pin-board' }, h('img', { src: pollImageUrl(p, code), alt: '' }));
+    for (const [x, y] of r.pins) board.append(h('span', { class: 'pin', style: { left: `${x * 100}%`, top: `${y * 100}%` } }));
+    if (p.region) board.append(h('span', { class: 'pin-region', style: { left: `${p.region.x * 100}%`, top: `${p.region.y * 100}%`, width: `${p.region.r * 200}%` } }));
+    body.push(board);
+    if (p.region && r.voters) body.push(h('p', { class: 'more' }, t('{p}% au nimerit zona corectă', { p: pct(r.inside, r.voters) })));
   } else if (p.type === 'wordcloud') {
     const top = r.words.slice(0, 15);
     const max = top[0]?.count || 0;
@@ -65,6 +79,7 @@ function pollBlock(p, i) {
       h('span', { class: 'tag' }, `${i + 1} · ${TYPE_LABELS[p.type]}`),
       h('span', { class: 'n' }, plural(r.voters, 'participant'), p.type === 'wordcloud' || p.type === 'open' ? ` · ${plural(r.responses, 'answer')}` : '')),
     h('h3', {}, p.question),
+    p.image && p.type !== 'pin' ? h('img', { class: 'qimg', src: pollImageUrl(p, code), alt: '' }) : null,
     body);
 }
 

@@ -43,7 +43,7 @@ test('every interface text has an English version', async () => {
   const { t } = await import('../public/js/i18n.js');
 
   const missing = new Set();
-  const ignore = new Set(['sm primary', 'sm', 'approve', 'archive', 'highlight', 'answer', 'restore', 'delete', 'Live', 'Quiz', 'Word cloud', 'participant', 'answer', 'Export CSV', 'online', 'Q&A', '● {n} online', 'closed', 'quiz', 'pending', 'live', 'pre', 'good', 'bad', 'end', 'reveal', '→ {step}']);
+  const ignore = new Set(['sm primary', 'sm', 'approve', 'archive', 'highlight', 'answer', 'restore', 'delete', 'Live', 'Quiz', 'Word cloud', 'participant', 'answer', 'Export CSV', 'online', 'Q&A', '● {n} online', 'closed', 'quiz', 'pending', 'live', 'pre', 'good', 'bad', 'end', 'reveal', '→ {step}', 'ranking', 'pin', 'scale']);
   for (const f of readdirSync(new URL('../public/js/', import.meta.url))) {
     for (const s of translatedLiterals(read(`public/js/${f}`))) {
       if (!ignore.has(s) && t(s) === s) missing.add(`${f}: ${s}`);

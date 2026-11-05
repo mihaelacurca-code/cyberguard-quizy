@@ -6,7 +6,8 @@ import { parseScenario } from './scenario.js';
 export class UserError extends Error {}
 
 const CODE_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-export const POLL_TYPES = ['choice', 'quiz', 'wordcloud', 'open', 'rating'];
+export const POLL_TYPES = ['choice', 'quiz', 'wordcloud', 'open', 'rating', 'ranking', 'scale', 'pin'];
+export const IMAGE_MAX_BYTES = 1024 * 1024;
 const SCREENS = ['join', 'poll', 'qa', 'leaderboard', 'test', 'scenario'];
 const TEST_ROUNDS = ['pre', 'post'];
 const CERT_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -26,6 +27,11 @@ export const LIMITS = {
   maxEntries: 10,
   reply: 1000,
   issuer: 80,
+  rankingOptions: 10,
+  statements: 10,
+  statement: 200,
+  scaleLabel: 40,
+  pins: 2000,
 };
 
 const DEFAULT_SETTINGS = {
@@ -366,6 +372,27 @@ export function createStore(db) {
       config.timeLimit = int(data.timeLimit, 0, 600, 0);
       if (config.timeLimit > 0 && config.timeLimit < 5) config.timeLimit = 5;
     }
+    if (type === 'ranking' || type === 'scale') {
+      const what = type === 'scale' ? 'afirmații' : 'opțiuni';
+      const max = type === 'scale' ? LIMITS.statements : LIMITS.rankingOptions;
+      const items = (Array.isArray(data.options) ? data.options : [])
+        .map((o) => text(o, type === 'scale' ? LIMITS.statement : LIMITS.option, type === 'scale' ? 'Afirmația' : 'Opțiunea', { required: false }))
+        .filter(Boolean);
+      if (items.length < (type === 'scale' ? 1 : 2)) throw new UserError(type === 'scale' ? 'Adaugă cel puțin o afirmație.' : 'Adaugă cel puțin două opțiuni.');
+      if (items.length > max) throw new UserError(`Cel mult ${max} ${what}.`);
+      config.options = items;
+    }
+    if (type === 'scale') {
+      config.scale = int(data.scale, 3, 7, 5);
+      config.labels = (Array.isArray(data.labels) ? data.labels : []).slice(0, 2)
+        .map((l) => text(l, LIMITS.scaleLabel, 'Eticheta', { required: false }));
+    }
+    if (type === 'pin' && data.region) {
+      const r = data.region;
+      const ok = [r.x, r.y, r.r].every((n) => typeof n === 'number' && Number.isFinite(n));
+      if (!ok || r.x < 0 || r.x > 1 || r.y < 0 || r.y > 1 || r.r < 0.01 || r.r > 0.5) throw new UserError('Zona corectă nu este validă.');
+      config.region = { x: Math.round(r.x * 1000) / 1000, y: Math.round(r.y * 1000) / 1000, r: Math.round(r.r * 1000) / 1000 };
+    }
     if (type === 'rating') config.scale = int(data.scale, 3, 10, 5);
     if (type === 'wordcloud') config.maxEntries = int(data.maxEntries, 1, LIMITS.maxEntries, 3);
     if (type === 'open') config.maxEntries = int(data.maxEntries, 1, LIMITS.maxEntries, 1);
@@ -404,6 +431,8 @@ export function createStore(db) {
     if (hasVotes && (p.type !== existing.type || optionsChanged(existing, p))) {
       throw new UserError('Sondajul are deja răspunsuri. Resetează-l înainte să schimbi tipul sau opțiunile.');
     }
+    // The image is uploaded separately; editing the text keeps it.
+    if (existing.config.image) p.config.image = existing.config.image;
     st.updatePoll.run(p.type, p.question, JSON.stringify(p.config), p.showResults ? 1 : 0, existing.id);
     if (existing.type === 'quiz' && existing.revealed) rescoreQuiz(requirePoll(ev, pollId));
   }
@@ -415,13 +444,45 @@ export function createStore(db) {
 
   function duplicatePoll(ev, pollId) {
     const p = requirePoll(ev, pollId);
-    return createPoll(ev, {
+    const id = createPoll(ev, {
       type: p.type, question: p.question, ...p.config, showResults: p.show_results,
     }, p.kind);
+    const img = st.getAsset.get(ev.id, `poll-${p.id}`);
+    if (img) {
+      st.putAsset.run(ev.id, `poll-${id}`, img.mime, img.data, now());
+      const copy = requirePoll(ev, id);
+      st.updatePoll.run(copy.type, copy.question, JSON.stringify({ ...copy.config, image: now() }), copy.show_results ? 1 : 0, id);
+    }
+    return id;
   }
 
   function deletePoll(ev, pollId) {
-    st.deletePoll.run(requirePoll(ev, pollId).id);
+    const p = requirePoll(ev, pollId);
+    st.deleteAsset.run(ev.id, `poll-${p.id}`);
+    st.deletePoll.run(p.id);
+  }
+
+  // ---------- poll images ----------
+
+  function setPollImage(ev, pollId, buf) {
+    const p = requirePoll(ev, pollId);
+    if (!imageType(buf)) throw new UserError('Imaginea trebuie să fie PNG, JPG sau WebP.');
+    if (buf.length > IMAGE_MAX_BYTES) throw new UserError('Imaginea poate avea cel mult 1 MB.');
+    const t = now();
+    st.putAsset.run(ev.id, `poll-${p.id}`, imageType(buf), buf, t);
+    st.updatePoll.run(p.type, p.question, JSON.stringify({ ...p.config, image: t }), p.show_results ? 1 : 0, p.id);
+  }
+
+  function removePollImage(ev, pollId) {
+    const p = requirePoll(ev, pollId);
+    st.deleteAsset.run(ev.id, `poll-${p.id}`);
+    const { image, ...config } = p.config;
+    st.updatePoll.run(p.type, p.question, JSON.stringify(config), p.show_results ? 1 : 0, p.id);
+  }
+
+  function getPollImage(code, pollId) {
+    const ev = getEvent(code);
+    return ev ? st.getAsset.get(ev.id, `poll-${Number(pollId)}`) || null : null;
   }
 
   function movePoll(ev, pollId, direction) {
@@ -439,6 +500,7 @@ export function createStore(db) {
     const p = requirePoll(ev, pollId);
     if (!['draft', 'live', 'closed'].includes(status)) throw new UserError('Stare necunoscută.');
     if (p.kind === 'test') throw new UserError('Întrebările de test se deschid împreună, din secțiunea Test.');
+    if (status === 'live' && p.type === 'pin' && !p.config.image) throw new UserError('Încarcă întâi imaginea pe care participanții pun pinul.');
     tx(() => {
       if (status === 'live') {
         st.closeLive.run(ev.id);
@@ -456,7 +518,8 @@ export function createStore(db) {
 
   function revealQuiz(ev, pollId, revealed = true) {
     const p = requirePoll(ev, pollId);
-    if (p.type !== 'quiz' || p.kind === 'test') throw new UserError('Doar quiz-urile au răspuns corect.');
+    const hasAnswer = p.type === 'quiz' || (p.type === 'pin' && p.config.region);
+    if (!hasAnswer || p.kind === 'test') throw new UserError('Doar quiz-urile și pinurile cu zonă marcată au răspuns corect.');
     // The quiz stays on screen so everyone sees whether they got it right; vote() refuses revealed quizzes.
     st.setRevealed.run(revealed ? 1 : 0, p.id);
   }
@@ -540,6 +603,38 @@ export function createStore(db) {
         });
         break;
       }
+      case 'ranking': {
+        const n = p.config.options.length;
+        const order = (Array.isArray(raw) ? raw : []).map(Number);
+        const valid = order.length === n && new Set(order).size === n && order.every((i) => Number.isInteger(i) && i >= 0 && i < n);
+        if (!valid) throw new UserError('Ordonează toate opțiunile.');
+        tx(() => {
+          st.deleteVotesOf.run(p.id, pid);
+          st.insertVote.run(p.id, pid, nick, JSON.stringify(order), 0, at, '');
+        });
+        break;
+      }
+      case 'scale': {
+        const marks = (Array.isArray(raw) ? raw : []).map(Number);
+        if (marks.length !== p.config.options.length || !marks.every((m) => Number.isInteger(m) && m >= 1 && m <= p.config.scale)) {
+          throw new UserError('Dă o notă fiecărei afirmații.');
+        }
+        tx(() => {
+          st.deleteVotesOf.run(p.id, pid);
+          st.insertVote.run(p.id, pid, nick, JSON.stringify(marks), 0, at, '');
+        });
+        break;
+      }
+      case 'pin': {
+        if (p.revealed) throw new UserError('Zona corectă a fost deja dezvăluită.');
+        const [x, y] = (Array.isArray(raw) ? raw : []).map(Number);
+        if (![x, y].every((n) => Number.isFinite(n) && n >= 0 && n <= 1)) throw new UserError('Atinge imaginea ca să pui pinul.');
+        tx(() => {
+          st.deleteVotesOf.run(p.id, pid);
+          st.insertVote.run(p.id, pid, nick, JSON.stringify([Math.round(x * 1000) / 1000, Math.round(y * 1000) / 1000]), 0, at, '');
+        });
+        break;
+      }
       case 'wordcloud':
       case 'open': {
         const max = p.type === 'wordcloud' ? LIMITS.word : LIMITS.openText;
@@ -589,6 +684,33 @@ export function createStore(db) {
       }
       case 'open': {
         out.answers = votes.slice(-300).reverse().map((v) => ({ text: JSON.parse(v.value)[0], name: v.name, at: v.created_at }));
+        break;
+      }
+      case 'ranking': {
+        // Borda count: first place earns n-1 points, last place 0.
+        const n = p.config.options.length;
+        const points = Array(n).fill(0); const sumPos = Array(n).fill(0); const firsts = Array(n).fill(0);
+        for (const v of votes) {
+          JSON.parse(v.value).forEach((opt, pos) => { points[opt] += n - 1 - pos; sumPos[opt] += pos + 1; if (pos === 0) firsts[opt]++; });
+        }
+        out.ranking = p.config.options.map((_, i) => ({
+          option: i, points: points[i], firsts: firsts[i], average: votes.length ? Math.round((sumPos[i] / votes.length) * 10) / 10 : null,
+        })).sort((a, b) => (b.points - a.points) || (a.option - b.option));
+        out.maxPoints = votes.length * (n - 1);
+        break;
+      }
+      case 'scale': {
+        out.statements = p.config.options.map(() => ({ counts: Array(p.config.scale).fill(0), average: null }));
+        const sums = p.config.options.map(() => 0);
+        for (const v of votes) JSON.parse(v.value).forEach((m, i) => { if (out.statements[i]) { out.statements[i].counts[m - 1]++; sums[i] += m; } });
+        out.statements.forEach((s, i) => { s.average = votes.length ? Math.round((sums[i] / votes.length) * 100) / 100 : null; });
+        break;
+      }
+      case 'pin': {
+        const pins = votes.map((v) => JSON.parse(v.value));
+        out.pins = pins.slice(-LIMITS.pins);
+        const r = p.config.region;
+        if (r) out.inside = pins.filter(([x, y]) => (x - r.x) ** 2 + (y - r.y) ** 2 <= r.r ** 2).length;
         break;
       }
     }
@@ -952,8 +1074,10 @@ export function createStore(db) {
       options: p.config.options, multi: !!p.config.multi, scale: p.config.scale,
       maxEntries: p.config.maxEntries, timeLimit: p.config.timeLimit || 0,
       openedAt: p.opened_at, revealed: p.revealed, showResults: p.show_results,
+      image: p.config.image || 0, labels: p.config.labels, hasRegion: Boolean(p.config.region),
     };
     if (p.type === 'quiz' && p.revealed) out.correct = p.config.correct;
+    if (p.type === 'pin' && p.revealed && p.config.region) out.region = p.config.region;
     if (withResults) out.results = results(p);
     return out;
   }
@@ -980,6 +1104,7 @@ export function createStore(db) {
   function presenterPoll(p) {
     const out = publicPoll(p, { withResults: true });
     if (p.type === 'quiz' && !p.revealed) out.results = { voters: out.results.voters, responses: out.results.responses };
+    if (p.type === 'pin' && !p.revealed && out.results) delete out.results.inside;
     return out;
   }
 
@@ -1008,6 +1133,7 @@ export function createStore(db) {
       polls: st.polls.all(ev.id).map(hydratePoll).map((p) => ({
         ...publicPoll(p, { withResults: true }),
         correct: p.config.correct,
+        region: p.config.region || null,
       })),
       questions: sortQuestions(questions(ev)),
       leaderboard: leaderboard(ev, 50).map(({ id, ...r }) => r),
@@ -1086,7 +1212,10 @@ export function createStore(db) {
     for (const p of [...st.polls.all(ev.id), ...st.testPolls.all(ev.id)].map(hydratePoll)) {
       for (const v of st.votesByPoll.all(p.id)) {
         const value = JSON.parse(v.value);
-        const answer = (p.type === 'choice' || p.type === 'quiz') ? value.map((i) => p.config.options[i]).join(' | ') : value.join(' | ');
+        const answer = (p.type === 'choice' || p.type === 'quiz') ? value.map((i) => p.config.options[i]).join(' | ')
+          : p.type === 'ranking' ? value.map((i) => p.config.options[i]).join(' > ')
+            : p.type === 'scale' ? value.map((m, i) => `${p.config.options[i]}: ${m}`).join(' | ')
+              : p.type === 'pin' ? `x=${value[0]} y=${value[1]}` : value.join(' | ');
         const type = p.kind === 'test' ? `test-${v.round}` : p.type;
         rows.push([type, p.question, v.participant_id.slice(0, 8), v.name, answer, p.type === 'quiz' ? v.score : '', new Date(v.created_at).toISOString()]);
       }
@@ -1100,6 +1229,7 @@ export function createStore(db) {
   return {
     createEvent, getEvent, requireEvent, verifyAdmin, updateEvent, deleteEvent, changeCode, rotateAdminKey, listEvents, setLogo, removeLogo, getLogo,
     appSetting, setAppSetting, testReport, issueCertificate, certificateView, replyToQuestion, reportData,
+    setPollImage, removePollImage, getPollImage,
     createScenario, deleteScenario, startScenario, scenarioVote, revealScenario, advanceScenario, backScenario, stopScenario, scenarioView, scenarioRuns,
     createPoll, createPolls, updatePoll, duplicatePoll, deletePoll, movePoll, setPollStatus, setShowResults, revealQuiz, resetPoll,
     vote, results, leaderboard,

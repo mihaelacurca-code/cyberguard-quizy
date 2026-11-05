@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { Server } from 'socket.io';
 import QRCode from 'qrcode';
 import { openDb } from './db.js';
-import { createStore, UserError, LOGO_MAX_BYTES } from './store.js';
+import { createStore, UserError, LOGO_MAX_BYTES, IMAGE_MAX_BYTES } from './store.js';
 import { localize, pickLang } from './i18n.js';
 import { SCENARIO_EXAMPLE } from './scenario.js';
 
@@ -39,7 +39,7 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     const host = /^[a-z0-9.-]+(:\d+)?$/i.test(req.get('host') || '') ? req.get('host') : '';
     const ws = host ? ` wss://${host} ws://${host}` : '';
     res.set('Content-Security-Policy',
-      `default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src 'self'${ws}; frame-ancestors 'self'; base-uri 'none'; form-action 'self'; object-src 'none'`);
+      `default-src 'self'; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self'${ws}; frame-ancestors 'self'; base-uri 'none'; form-action 'self'; object-src 'none'`);
     res.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
     next();
   });
@@ -140,6 +140,42 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     store.removeLogo(ev);
     changed(ev.code);
     res.json({ ok: true });
+  });
+
+  // ---------- poll images ----------
+  app.post('/api/events/:code/polls/:id/image', express.raw({ type: () => true, limit: IMAGE_MAX_BYTES + 1024 }), (req, res) => {
+    if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări.' });
+    const ev = adminOf(req);
+    if (!ev) {
+      limits.miss.take(req.ip);
+      return res.status(403).json({ error: 'Acces interzis.' });
+    }
+    try {
+      store.setPollImage(ev, req.params.id, Buffer.isBuffer(req.body) ? req.body : Buffer.alloc(0));
+      changed(ev.code);
+      res.json({ ok: true });
+    } catch (e) {
+      sendError(res, e);
+    }
+  });
+
+  app.delete('/api/events/:code/polls/:id/image', (req, res) => {
+    const ev = adminOf(req);
+    if (!ev) return res.status(403).json({ error: 'Acces interzis.' });
+    try {
+      store.removePollImage(ev, req.params.id);
+      changed(ev.code);
+      res.json({ ok: true });
+    } catch (e) {
+      sendError(res, e);
+    }
+  });
+
+  app.get('/media/:code/poll/:id', (req, res) => {
+    const img = store.getPollImage(req.params.code, req.params.id);
+    if (!img) return res.status(404).end();
+    res.set('Content-Type', img.mime).set('Cache-Control', 'public, max-age=86400')
+      .set('Content-Security-Policy', "default-src 'none'; sandbox").send(Buffer.from(img.data));
   });
 
   app.get('/brand/:code/logo', (req, res) => {
@@ -252,7 +288,8 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   // Bodies over the limit (a too-large logo) get a readable message instead of Express's HTML page.
   app.use((err, req, res, next) => {
     if (err?.type === 'entity.too.large') {
-      return res.status(413).json({ error: req.path.endsWith('/logo') ? 'Logo-ul poate avea cel mult 500 KB.' : 'Cererea este prea mare.' });
+      const error = req.path.endsWith('/logo') ? 'Logo-ul poate avea cel mult 500 KB.' : req.path.endsWith('/image') ? 'Imaginea poate avea cel mult 1 MB.' : 'Cererea este prea mare.';
+      return res.status(413).json({ error });
     }
     if (err?.type === 'entity.parse.failed') return res.status(400).json({ error: 'Cerere invalidă.' });
     next(err);
