@@ -2,18 +2,18 @@
    for every page (it is projected in dark rooms too). A client color per event replaces the gold. */
 :root {
   --bg: #050920;
-  --surface: rgb(14 21 54 / 80%);
+  --surface: rgb(12 18 48 / 94%);
   --surface-solid: #0e1638;
   --surface-2: rgb(52 66 128 / 30%);
   --text: #f4f1e8;
   --muted: #a4abc8;
-  --border: rgb(255 199 71 / 17%);
+  --border: rgb(164 171 200 / 16%);
   --primary: #f5b400;
   --primary-strong: #ffd23f;
   --primary-ink: #0a0f2a;
   --primary-soft: rgb(245 180 0 / 14%);
-  --glow: 0 0 0 1px rgb(245 180 0 / 55%), 0 0 18px rgb(255 190 40 / 38%);
-  --glow-color: rgb(255 200 60 / 55%);
+  --glow: 0 0 0 1px rgb(245 180 0 / 55%), 0 0 10px rgb(255 190 40 / 16%);
+  --glow-color: rgb(255 200 60 / 30%);
   --primary-deep: #e07b00;
   --ok: #33e6a8;
   --ok-soft: rgb(51 230 168 / 14%);
@@ -211,15 +211,15 @@ body.offline::before {
 body { min-height: 100vh; }
 .topbar { background: rgb(5 9 32 / 75%); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); }
 .card, .poll-item, .question, .phone-like { backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
-.brand b { color: var(--primary-strong); text-shadow: 0 0 14px var(--glow-color); }
-.primary { background: linear-gradient(180deg, var(--primary-strong), var(--primary)); color: var(--primary-ink); border-color: transparent; box-shadow: var(--glow); }
+.brand b { color: var(--primary-strong); }
+.primary { background: linear-gradient(180deg, var(--primary-strong), var(--primary)); color: var(--primary-ink); border-color: transparent; box-shadow: 0 2px 8px rgb(245 180 0 / 18%); }
 .primary:hover { background: linear-gradient(180deg, var(--primary-strong), var(--primary)); filter: brightness(1.12); }
 input[type=text], input[type=number], input[type=password], textarea, select { background: rgb(3 6 22 / 72%); }
 .option[aria-pressed=true], .upvote[aria-pressed=true], .question.highlighted, .poll-item.live { box-shadow: var(--glow); }
-.bars .bar-fill { background: linear-gradient(90deg, var(--primary-deep), var(--primary-strong)); box-shadow: 0 0 12px var(--glow-color); }
-.bars .bar.correct .bar-fill { background: var(--ok); box-shadow: 0 0 12px rgb(51 230 168 / 55%); }
-.cloud span { text-shadow: 0 0 16px currentColor; }
-.average, .timer, .join-box .code { text-shadow: 0 0 16px var(--glow-color); }
+.bars .bar-fill { background: linear-gradient(90deg, var(--primary-deep), var(--primary-strong)); }
+.bars .bar.correct .bar-fill { background: var(--ok); }
+.cloud span { text-shadow: none; }
+.average, .timer, .join-box .code { text-shadow: none; }
 .hero h1 { background: linear-gradient(90deg, #ffffff, #ffe9a8 55%, var(--primary-strong)); -webkit-background-clip: text; background-clip: text; color: transparent; }
 .tabs button[aria-selected=true], .screen-switch button[aria-pressed=true], .stars button[aria-pressed=true] { box-shadow: var(--glow); }
 .tabs button[aria-selected=true] { background: var(--surface-solid); color: var(--text); }
@@ -230,7 +230,7 @@ input[type=text], input[type=number], input[type=password], textarea, select { b
 .features { grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); }
 .features .card + .card { margin-top: 0; }
 .brand { display: inline-flex; align-items: center; gap: .5rem; letter-spacing: .01em; }
-.brand img { height: 1.9em; width: auto; filter: drop-shadow(0 0 8px var(--glow-color)); }
+.brand img { height: 1.9em; width: auto; }
 .brand span { white-space: nowrap; }
 .small-brand { font-size: .85rem; }
 .small-brand img { height: 1.6em; }
@@ -400,3 +400,16 @@ img.client-logo[hidden] { display: none !important; }
 form.row > input.grow { flex: 1 1 11rem; }
 /* admin topbar on phones: the event title wraps instead of being cut */
 @media (max-width: 520px) { #event-title { white-space: normal !important; overflow-wrap: anywhere; flex-basis: 100%; font-size: .95rem; } }
+
+/* ---------- calmer look: the question comes first ---------- */
+.card, .poll-item, .question { backdrop-filter: none; -webkit-backdrop-filter: none; }
+.topbar { background: rgb(5 9 32 / 92%); }
+.poll-q { font-size: clamp(1.3rem, 4.6vw, 1.65rem); line-height: 1.25; letter-spacing: -.01em; margin-bottom: .9rem; }
+.option { font-size: 1.02rem; background: rgb(255 255 255 / 3%); }
+.option:hover { background: rgb(255 255 255 / 6%); }
+.present-main h1 { text-wrap: balance; }
+.test-summary.big .big-num, .podium .ppts, .test-summary .gain.up { text-shadow: none; }
+.podium .block { box-shadow: none; }
+.verify-badge.ok { box-shadow: none; }
+.scenario-stage .outcome.good { text-shadow: none; }
+@media (min-width: 361px) and (max-width: 400px) { .event-topbar #name-btn { max-width: 9rem; } }

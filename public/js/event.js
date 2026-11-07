@@ -251,7 +251,7 @@ function renderPoll() {
 
   const answered = mine.length > 0;
   const parts = [h('div', { class: 'row between' }, h('span', { class: 'badge live' }, t('Live')), timerEl(p))];
-  parts.push(h('h2', { style: { marginTop: '.75rem' } }, p.question));
+  parts.push(h('h2', { class: 'poll-q', style: { marginTop: '.75rem' } }, p.question));
   parts.push(pollImage(p));
 
   if (p.type === 'ranking') parts.push(rankingForm(p, mine));
