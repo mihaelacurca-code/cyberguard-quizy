@@ -413,3 +413,5 @@ form.row > input.grow { flex: 1 1 11rem; }
 .verify-badge.ok { box-shadow: none; }
 .scenario-stage .outcome.good { text-shadow: none; }
 @media (min-width: 361px) and (max-width: 400px) { .event-topbar #name-btn { max-width: 9rem; } }
+/* privacy notice at the entrance: readable, scrolls if long */
+.privacy-note { max-height: 45vh; overflow: auto; line-height: 1.5; }

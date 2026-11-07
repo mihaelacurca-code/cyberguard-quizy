@@ -32,6 +32,8 @@ export const LIMITS = {
   statement: 200,
   scaleLabel: 40,
   pins: 2000,
+  certIntro: 120,
+  privacy: 3000,
 };
 
 const DEFAULT_SETTINGS = {
@@ -43,6 +45,13 @@ const DEFAULT_SETTINGS = {
   certEnabled: false,
   certIssuer: '',
   certMinScore: 0,
+  // Text above the name ('' = the default wording) and whether the final test score is printed.
+  certIntro: '',
+  certShowScore: true,
+  // Data-protection note shown to participants when they enter ('' = none).
+  privacy: '',
+  // When the event was closed; closed events can be deleted automatically after a while.
+  closedAt: 0,
   scenario: null,
   // Per-event look: client logo (stored separately), accent color, background, product brand.
   brand: { color: '', background: 'neon', hideProduct: false, logo: 0 },
@@ -66,6 +75,13 @@ const hash = (s) => createHash('sha256').update(s).digest('hex');
 function text(value, max, label, { required = true } = {}) {
   const s = typeof value === 'string' ? value.replace(/\s+/g, ' ').trim() : '';
   if (required && !s) throw new UserError(`${label} lipsește.`);
+  if (s.length > max) throw new UserError(`${label} poate avea cel mult ${max} caractere.`);
+  return s;
+}
+
+// Like text(), but keeps paragraphs: for notes that participants read as written.
+function longText(value, max, label) {
+  const s = typeof value === 'string' ? value.replace(/\r\n?/g, '\n').replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim() : '';
   if (s.length > max) throw new UserError(`${label} poate avea cel mult ${max} caractere.`);
   return s;
 }
@@ -242,9 +258,12 @@ export function createStore(db) {
 
   function updateEvent(ev, { name, settings = {} }) {
     const next = { ...ev.settings };
-    for (const k of ['qaEnabled', 'qaModeration', 'closed', 'certEnabled']) {
+    for (const k of ['qaEnabled', 'qaModeration', 'closed', 'certEnabled', 'certShowScore']) {
       if (k in settings) next[k] = Boolean(settings[k]);
     }
+    if ('closed' in settings) next.closedAt = next.closed ? (ev.settings.closed ? ev.settings.closedAt || now() : now()) : 0;
+    if ('certIntro' in settings) next.certIntro = text(settings.certIntro, LIMITS.certIntro, 'Textul de pe certificat', { required: false });
+    if ('privacy' in settings) next.privacy = longText(settings.privacy, LIMITS.privacy, 'Nota de informare');
     if ('certIssuer' in settings) next.certIssuer = text(settings.certIssuer, LIMITS.issuer, 'Emitentul', { required: false });
     if ('certMinScore' in settings) next.certMinScore = int(settings.certMinScore, 0, 100, 0);
     if (settings.brand && typeof settings.brand === 'object') {
@@ -318,12 +337,112 @@ export function createStore(db) {
     return adminKey;
   }
 
+  // A copy for the next session: questions, test, scenarios, look, certificate and privacy settings.
+  // No answers, participants or certificates are copied.
+  function duplicateEvent(src, name) {
+    const { code, adminKey } = createEvent(name || `${src.name} (copie)`.slice(0, LIMITS.eventName));
+    const ev = getEvent(code);
+    const s = src.settings;
+    const settings = {
+      ...DEFAULT_SETTINGS,
+      qaEnabled: s.qaEnabled, qaModeration: s.qaModeration,
+      certEnabled: s.certEnabled, certIssuer: s.certIssuer, certMinScore: s.certMinScore, certIntro: s.certIntro, certShowScore: s.certShowScore,
+      privacy: s.privacy,
+      brand: { ...s.brand, logo: 0 },
+    };
+    tx(() => {
+      const logo = st.getAsset.get(src.id, 'logo');
+      if (logo) {
+        settings.brand.logo = now();
+        st.putAsset.run(ev.id, 'logo', logo.mime, logo.data, settings.brand.logo);
+      }
+      st.updateEvent.run(ev.name, JSON.stringify(settings), ev.id);
+      for (const p of [...st.polls.all(src.id), ...st.testPolls.all(src.id)]) {
+        const r = st.insertPoll.run(ev.id, p.type, p.question, p.config, p.show_results, p.position, now(), p.kind);
+        const img = st.getAsset.get(src.id, `poll-${p.id}`);
+        if (img) st.putAsset.run(ev.id, `poll-${Number(r.lastInsertRowid)}`, img.mime, img.data, now());
+      }
+      for (const sc of db.prepare('SELECT title, source, definition FROM scenarios WHERE event_id = ? ORDER BY id').all(src.id)) {
+        st.insertScenario.run(ev.id, sc.title, sc.source, sc.definition, now());
+      }
+    });
+    return { code, adminKey };
+  }
+
+  // Clears every answer, question, certificate and scenario vote, and keeps the content.
+  // Meant for after a rehearsal.
+  function resetResults(ev) {
+    tx(() => {
+      db.prepare('DELETE FROM votes WHERE poll_id IN (SELECT id FROM polls WHERE event_id = ?)').run(ev.id);
+      db.prepare("UPDATE polls SET status = 'draft', revealed = 0, opened_at = NULL WHERE event_id = ?").run(ev.id);
+      db.prepare('DELETE FROM questions WHERE event_id = ?').run(ev.id);
+      db.prepare('DELETE FROM certificates WHERE event_id = ?').run(ev.id);
+      db.prepare('DELETE FROM scenario_votes WHERE scenario_id IN (SELECT id FROM scenarios WHERE event_id = ?)').run(ev.id);
+      db.prepare('DELETE FROM scenario_runs WHERE scenario_id IN (SELECT id FROM scenarios WHERE event_id = ?)').run(ev.id);
+      patchSettings(ev, { testRound: null, scenario: null, screen: 'join' });
+    });
+  }
+
+  // Everyone who did anything in the event, with what they did.
+  function participantList(ev) {
+    const map = new Map();
+    const get = (pid) => {
+      if (!map.has(pid)) map.set(pid, { id: pid, name: '', answers: 0, questions: 0, certificate: null, first: Infinity });
+      return map.get(pid);
+    };
+    for (const v of db.prepare(`SELECT v.participant_id AS pid, v.name, v.created_at AS at FROM votes v JOIN polls p ON p.id = v.poll_id
+                                WHERE p.event_id = ? ORDER BY v.id`).all(ev.id)) {
+      const r = get(v.pid); r.answers++; if (v.name) r.name = v.name; r.first = Math.min(r.first, v.at);
+    }
+    for (const qu of db.prepare('SELECT participant_id AS pid, author, created_at AS at FROM questions WHERE event_id = ? ORDER BY id').all(ev.id)) {
+      const r = get(qu.pid); r.questions++; if (qu.author) r.name = qu.author; r.first = Math.min(r.first, qu.at);
+    }
+    for (const sv of db.prepare(`SELECT participant_id AS pid, created_at AS at FROM scenario_votes
+                                 WHERE scenario_id IN (SELECT id FROM scenarios WHERE event_id = ?)`).all(ev.id)) {
+      const r = get(sv.pid); r.answers++; r.first = Math.min(r.first, sv.at);
+    }
+    for (const c of db.prepare('SELECT id, participant_id AS pid, name, issued_at AS at FROM certificates WHERE event_id = ?').all(ev.id)) {
+      const r = get(c.pid); r.certificate = c.id; r.name = c.name; r.first = Math.min(r.first, c.at);
+    }
+    const hasTest = st.testPolls.all(ev.id).length > 0;
+    return [...map.values()].sort((a, b) => a.first - b.first).map((r) => ({
+      ...r,
+      pre: hasTest ? testScoreOf(ev, r.id, 'pre')?.percent ?? null : null,
+      post: hasTest ? testScoreOf(ev, r.id, 'post')?.percent ?? null : null,
+    }));
+  }
+
+  function deleteParticipant(ev, participantId) {
+    const pid = participant(participantId);
+    tx(() => {
+      db.prepare('DELETE FROM votes WHERE participant_id = ? AND poll_id IN (SELECT id FROM polls WHERE event_id = ?)').run(pid, ev.id);
+      db.prepare('DELETE FROM upvotes WHERE participant_id = ? AND question_id IN (SELECT id FROM questions WHERE event_id = ?)').run(pid, ev.id);
+      db.prepare('DELETE FROM questions WHERE participant_id = ? AND event_id = ?').run(pid, ev.id);
+      db.prepare('DELETE FROM certificates WHERE participant_id = ? AND event_id = ?').run(pid, ev.id);
+      db.prepare('DELETE FROM scenario_votes WHERE participant_id = ? AND scenario_id IN (SELECT id FROM scenarios WHERE event_id = ?)').run(pid, ev.id);
+    });
+  }
+
+  // Deletes events that have been closed for longer than the retention period (0 = keep forever).
+  // An event closed before closedAt existed starts its clock at the first sweep.
+  function purgeClosedEvents(days, at = now()) {
+    if (!(days > 0)) return [];
+    const deleted = [];
+    for (const row of db.prepare('SELECT * FROM events').all()) {
+      const ev = hydrateEvent(row);
+      if (!ev.settings.closed) continue;
+      if (!ev.settings.closedAt) { patchSettings(ev, { closedAt: at }); continue; }
+      if (ev.settings.closedAt < at - days * 86_400_000) { st.deleteEvent.run(ev.id); deleted.push(ev.code); }
+    }
+    return deleted;
+  }
+
   function listEvents() {
     return st.allEvents.all().map((e) => {
       const settings = { ...DEFAULT_SETTINGS, ...JSON.parse(e.settings) };
       return {
         code: e.code, name: e.name, createdAt: e.created_at, polls: e.polls,
-        participants: e.participants, closed: settings.closed, certificates: st.certCount.get(e.id).n,
+        participants: e.participants, closed: settings.closed, closedAt: settings.closedAt || 0, certificates: st.certCount.get(e.id).n,
       };
     });
   }
@@ -830,7 +949,9 @@ export function createStore(db) {
     const settings = { ...DEFAULT_SETTINGS, ...JSON.parse(row.event_settings) };
     const brand = { ...DEFAULT_SETTINGS.brand, ...(settings.brand || {}) };
     return {
-      id: row.id, name: row.name, event: row.event_name, score: row.score, issuedAt: row.issued_at, issuer: settings.certIssuer,
+      id: row.id, name: row.name, event: row.event_name, issuedAt: row.issued_at, issuer: settings.certIssuer,
+      score: settings.certShowScore === false ? null : row.score,
+      intro: settings.certIntro || '',
       logo: brand.logo ? `/brand/${encodeURIComponent(row.event_code)}/logo?v=${brand.logo}` : null,
       hideProduct: Boolean(brand.hideProduct),
       color: brand.color || '',
@@ -1175,6 +1296,7 @@ export function createStore(db) {
         post: open === 'post' ? null : testScoreOf(ev, pid, 'post'),
       },
       certificate: cert ? cert.id : null,
+      certificateName: cert ? cert.name : null,
     };
   }
 
@@ -1228,6 +1350,7 @@ export function createStore(db) {
 
   return {
     createEvent, getEvent, requireEvent, verifyAdmin, updateEvent, deleteEvent, changeCode, rotateAdminKey, listEvents, setLogo, removeLogo, getLogo,
+    duplicateEvent, resetResults, participantList, deleteParticipant, purgeClosedEvents,
     appSetting, setAppSetting, testReport, issueCertificate, certificateView, replyToQuestion, reportData,
     setPollImage, removePollImage, getPollImage,
     createScenario, deleteScenario, startScenario, scenarioVote, revealScenario, advanceScenario, backScenario, stopScenario, scenarioView, scenarioRuns,

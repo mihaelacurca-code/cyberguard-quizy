@@ -31,6 +31,7 @@
         <div class="row between" style="margin-bottom:.75rem">
           <h2 style="margin:0" data-i18n>Sondaje și quiz-uri</h2>
           <div class="row">
+            <button id="export-polls" type="button" data-i18n>Exportă</button>
             <button id="import-polls" type="button" data-i18n>Import în bloc</button>
             <button id="new-poll" class="primary" type="button" data-i18n>+ Sondaj nou</button>
           </div>
@@ -49,6 +50,7 @@
           <details id="test-questions-box">
             <summary id="test-questions-summary"></summary>
             <div id="test-questions" class="stack" style="margin-top:.5rem"></div>
+            <div class="row" style="margin-top:.6rem"><button id="export-test" class="sm" type="button" data-i18n>Exportă întrebările testului</button></div>
           </details>
           <form id="test-import" class="stack"></form>
         </div>
@@ -153,9 +155,39 @@
               <label for="cert-min" data-i18n>Scor minim la testul final (%, 0 = doar participare)</label>
               <input id="cert-min" type="number" min="0" max="100">
             </div>
+            <div>
+              <label for="cert-intro" data-i18n>Textul de deasupra numelui</label>
+              <input id="cert-intro" type="text" maxlength="120" placeholder="Prezentul certificat se acordă" data-i18n-placeholder>
+              <p class="small muted" style="margin:.3rem 0 0" data-i18n>Gol = „Prezentul certificat se acordă” (în engleză „This certificate is awarded to”).</p>
+            </div>
+            <label class="check"><input type="checkbox" id="cert-score"> <span data-i18n>Arată scorul de la testul final pe certificat</span></label>
             <button type="submit" data-i18n>Salvează</button>
           </form>
           <p class="small muted" style="margin:0" data-i18n>Fiecare certificat are un cod și un QR prin care oricine îi poate verifica autenticitatea.</p>
+        </div>
+
+        <div class="card stack">
+          <h2 data-i18n>Informare privind datele</h2>
+          <p class="small muted" style="margin:0" data-i18n>Participanții văd nota la intrarea în eveniment, înainte să răspundă. Lasă gol dacă nu e nevoie.</p>
+          <form id="privacy-form" class="stack">
+            <textarea id="privacy-text" rows="7" maxlength="3000"></textarea>
+            <div class="row">
+              <button type="submit" data-i18n>Salvează</button>
+              <button id="privacy-example" type="button" class="sm ghost" data-i18n>Pune textul standard</button>
+            </div>
+          </form>
+        </div>
+
+        <div class="card stack">
+          <div class="row between">
+            <h2 style="margin:0" data-i18n>Participanți</h2>
+            <span id="participant-count" class="badge"></span>
+          </div>
+          <details id="participants-box">
+            <summary data-i18n>Vezi lista</summary>
+            <div id="participants" style="margin-top:.5rem"></div>
+          </details>
+          <p class="small muted" style="margin:0" data-i18n>Ștergerea unui participant îi elimină răspunsurile, întrebările și certificatul (codul certificatului nu mai poate fi verificat).</p>
         </div>
 
         <div class="card stack">
@@ -170,6 +202,11 @@
           </form>
           <p class="small muted" style="margin:0" data-i18n>Un cod scurt și ușor de reținut, de exemplu NIS2. Linkurile și codul QR se schimbă imediat.</p>
           <label class="check"><input type="checkbox" id="closed"> <span data-i18n>Eveniment închis (nu mai primește răspunsuri)</span></label>
+          <div class="row">
+            <button id="duplicate-event" type="button" data-i18n>Duplică evenimentul</button>
+            <button id="reset-event" type="button" data-i18n>Șterge toate rezultatele</button>
+          </div>
+          <p class="small muted" style="margin:0" data-i18n>Duplicarea copiază întrebările, testul, scenariile, aspectul, setările certificatului și nota de informare, fără răspunsuri. „Șterge toate rezultatele” păstrează întrebările și șterge răspunsurile, întrebările din public și certificatele, de exemplu după o repetiție.</p>
           <button id="delete-event" class="danger" type="button" data-i18n>Șterge evenimentul definitiv</button>
         </div>
       </section>

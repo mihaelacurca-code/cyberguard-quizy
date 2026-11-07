@@ -8,6 +8,8 @@ const LABELS = {
   'Răspunsul': 'The answer',
   'Emitentul': 'The issuer',
   'Afirmația': 'The statement',
+  'Textul de pe certificat': 'The certificate text',
+  'Nota de informare': 'The privacy notice',
   'Eticheta': 'The label',
 };
 
@@ -117,6 +119,7 @@ const EXACT = {
   'Logo-ul poate avea cel mult 500 KB.': 'The logo can be at most 500 KB.',
   'Cererea este prea mare.': 'The request is too large.',
   'Cerere invalidă.': 'Invalid request.',
+  'Numărul de zile trebuie să fie între 0 și 3650.': 'The number of days must be between 0 and 3650.',
 };
 
 export function toEnglish(message) {

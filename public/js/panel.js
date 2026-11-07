@@ -64,6 +64,16 @@ $('#create').addEventListener('submit', async (e) => {
   } catch (err) { toast(err.message, true); }
 });
 
+$('#retention-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  try {
+    await api('/api/panel/settings', { method: 'POST', body: JSON.stringify({ retentionDays: Number($('#retention-days').value) || 0 }) });
+    toast(t('Salvat.'));
+    load();
+  } catch (err) { toast(err.message, true); }
+});
+
+let retention = 0;
 const fmt = (ms) => new Date(ms).toLocaleDateString(lang === 'ro' ? 'ro-RO' : 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
 
 async function load() {
@@ -75,13 +85,16 @@ async function load() {
     return toast(err.message, true);
   }
   $('#open-creation').checked = data.openCreation;
+  retention = data.retentionDays || 0;
+  if (document.activeElement !== $('#retention-days')) $('#retention-days').value = retention;
   const box = $('#events');
   if (!data.events.length) return fill(box, h('div', { class: 'card empty' }, t('Niciun eveniment încă.')));
   fill(box, h('div', { class: 'table-wrap' }, h('table', { class: 'events' },
     h('thead', {}, h('tr', {},
       [t('Eveniment'), t('Cod'), t('Creat'), t('Participanți'), t('Sondaje'), t('Certificate'), ''].map((c) => h('th', {}, c)))),
     h('tbody', {}, data.events.map((ev) => h('tr', {},
-      h('td', {}, h('strong', {}, ev.name), ev.closed ? h('span', { class: 'badge', style: { marginLeft: '.4rem' } }, t('Închis')) : null),
+      h('td', {}, h('strong', {}, ev.name), ev.closed ? h('span', { class: 'badge', style: { marginLeft: '.4rem' } }, t('Închis')) : null,
+        ev.closed && retention > 0 && ev.closedAt ? h('div', { class: 'small muted' }, t('Se șterge automat pe {date}', { date: fmt(ev.closedAt + retention * 86_400_000) })) : null),
       h('td', {}, h('code', {}, ev.code)),
       h('td', { class: 'muted' }, fmt(ev.createdAt)),
       h('td', { class: 'num' }, ev.participants),
@@ -91,6 +104,7 @@ async function load() {
         h('a', { class: 'btn sm primary', href: `/admin/${ev.code}` }, t('Administrează')),
         h('a', { class: 'btn sm', href: `/present/${ev.code}`, target: '_blank', rel: 'noopener' }, t('Ecran')),
         h('a', { class: 'btn sm', href: `/report/${ev.code}`, target: '_blank', rel: 'noopener' }, t('Raport')),
+        h('button', { class: 'sm', type: 'button', onclick: () => duplicate(ev) }, t('Duplică')),
         h('button', { class: 'sm', type: 'button', onclick: () => newKey(ev) }, t('Link nou de administrare')),
         h('button', { class: 'sm ghost danger', type: 'button', onclick: () => remove(ev) }, t('Șterge'))))))))));
 }
@@ -105,6 +119,19 @@ async function newKey(ev) {
     store('quizy:events', mine.slice(0, 50));
     copy(url);
     toast(t('Linkul nou a fost copiat. Trimite-l organizatorului.'));
+  } catch (err) { toast(err.message, true); }
+}
+
+async function duplicate(ev) {
+  const name = prompt(t('Numele evenimentului nou (copia):'), `${ev.name} (${t('copie')})`);
+  if (name === null) return;
+  try {
+    const data = await api(`/api/panel/events/${ev.code}/duplicate`, { method: 'POST', body: JSON.stringify({ name }) });
+    const mine = storage('quizy:events', []);
+    mine.unshift({ code: data.code, key: data.adminKey, name: name.trim(), at: Date.now() });
+    store('quizy:events', mine.slice(0, 50));
+    toast(t('Am creat copia.'));
+    load();
   } catch (err) { toast(err.message, true); }
 }
 

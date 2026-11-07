@@ -57,11 +57,12 @@ export async function drawCertificate(cert) {
 
   const [mark, qr] = await Promise.all([loadImage(cert.logo || '/img/cyberguard-mark.svg'), loadImage(`/qr/cert/${cert.id}.svg`)]);
   if (mark) {
-    // The client's logo (or the CYBERGUARD shield) fits a 520 x 240 box above the title.
-    const scale = Math.min(520 / mark.width, 240 / mark.height);
+    // The client's logo (or the CYBERGUARD shield) fits a wide 1300 x 250 box above the title,
+    // so a wide logo with text (crest + institution name) stays readable.
+    const scale = Math.min(1300 / mark.width, 250 / mark.height);
     const w = mark.width * scale;
     const hgt = mark.height * scale;
-    ctx.drawImage(mark, W / 2 - w / 2, 150 + (240 - hgt) / 2, w, hgt);
+    ctx.drawImage(mark, W / 2 - w / 2, 140 + (250 - hgt) / 2, w, hgt);
   }
 
   ctx.textAlign = 'center';
@@ -76,8 +77,9 @@ export async function drawCertificate(cert) {
   ctx.fillText(t('CERTIFICAT DE PARTICIPARE'), W / 2, 590);
 
   ctx.fillStyle = '#a4abc8';
-  ctx.font = '400 44px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
-  ctx.fillText(t('Se acordă dlui / dnei'), W / 2, 700);
+  const intro = cert.intro || t('Prezentul certificat se acordă');
+  fitText(ctx, intro, W - 500, 44, 400);
+  ctx.fillText(intro, W / 2, 700);
 
   ctx.fillStyle = '#ffffff';
   fitText(ctx, cert.name, W - 500, 120, 800);

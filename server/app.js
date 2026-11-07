@@ -91,6 +91,17 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   const sweeper = setInterval(() => Object.values(limits).forEach((l) => l.sweep()), 60_000);
   sweeper.unref();
 
+  // Data retention: closed events older than the panel's limit are deleted (checked hourly).
+  const retentionDays = () => store.appSetting('retentionDays', 0);
+  const purge = () => {
+    try {
+      for (const code of store.purgeClosedEvents(retentionDays())) changed(code);
+    } catch (e) { console.error(e); }
+  };
+  const purger = setInterval(purge, 3_600_000);
+  purger.unref();
+  setTimeout(purge, 0).unref?.();
+
   app.get('/api/scenario-example', (req, res) => res.json({ text: SCENARIO_EXAMPLE[pickLang(req.get('x-lang'))] }));
 
   app.get('/api/config', (req, res) => res.json({ openCreation: openCreation(), panel: Boolean(adminPassword) }));
@@ -253,12 +264,28 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   app.get('/api/panel/session', (req, res) => res.json({ configured: Boolean(adminPassword), authed: panelAuthed(req) }));
 
   app.get('/api/panel/events', requirePanel, (req, res) => {
-    res.json({ events: store.listEvents(), openCreation: openCreation() });
+    res.json({ events: store.listEvents(), openCreation: openCreation(), retentionDays: retentionDays() });
   });
 
   app.post('/api/panel/settings', requirePanel, (req, res) => {
     if ('openCreation' in (req.body || {})) store.setAppSetting('openCreation', Boolean(req.body.openCreation));
-    res.json({ openCreation: openCreation() });
+    if ('retentionDays' in (req.body || {})) {
+      const n = Number(req.body.retentionDays);
+      if (!Number.isInteger(n) || n < 0 || n > 3650) return res.status(400).json({ error: 'Numărul de zile trebuie să fie între 0 și 3650.' });
+      store.setAppSetting('retentionDays', n);
+      purge();
+    }
+    res.json({ openCreation: openCreation(), retentionDays: retentionDays() });
+  });
+
+  app.post('/api/panel/events/:code/duplicate', requirePanel, (req, res) => {
+    const ev = store.getEvent(req.params.code);
+    if (!ev) return res.status(404).json({ error: 'Evenimentul nu există.' });
+    try {
+      res.status(201).json(store.duplicateEvent(ev, req.body?.name));
+    } catch (e) {
+      sendError(res, e);
+    }
   });
 
   app.post('/api/panel/events/:code/key', requirePanel, (req, res) => {
@@ -332,6 +359,9 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   const adminActions = {
     'event:update': (ev, p) => store.updateEvent(ev, p),
     'event:delete': (ev) => store.deleteEvent(ev),
+    'event:reset': (ev) => store.resetResults(ev),
+    'participants:list': (ev) => ({ participants: store.participantList(ev) }),
+    'participant:delete': (ev, p) => store.deleteParticipant(ev, p.id),
     'poll:create': (ev, p) => ({ id: store.createPoll(ev, p.poll) }),
     'poll:import': (ev, p) => ({ ids: store.createPolls(ev, p.polls) }),
     'poll:update': (ev, p) => store.updatePoll(ev, p.id, p.poll),
@@ -424,7 +454,7 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
       if (role === 'audience' && !limits.join.take(ip)) throw new UserError('Prea multe conectări din această rețea. Încearcă puțin mai târziu.');
       const out = { state: stateFor(role, ev) };
       if (role === 'audience') out.me = store.personalState(ev.code, participantId);
-      socket.data = { code: ev.code, role, participantId: role === 'audience' ? participantId : null };
+      socket.data = { code: ev.code, role, participantId: role === 'audience' ? participantId : null, panel };
       socket.join(rooms(ev.code)[role]);
       if (role === 'audience') changed(ev.code);
       return out;
@@ -480,6 +510,12 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
         changed(code);
         return { code };
       }
+      if (action === 'event:duplicate') {
+        // Same rule as creating an event from the home page.
+        if (!openCreation() && !me().panel) throw new UserError('Crearea de evenimente este rezervată administratorilor.');
+        if (!limits.create.take(ip)) throw new UserError('Prea multe evenimente create într-o oră.');
+        return store.duplicateEvent(store.requireEvent(me().code), payload.name);
+      }
       const fn = adminActions[action];
       if (!fn) throw new UserError('Acțiune necunoscută.');
       const out = fn(store.requireEvent(me().code), payload);
@@ -497,6 +533,7 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     close: () => new Promise((resolve) => {
       closing = true;
       clearInterval(sweeper);
+      clearInterval(purger);
       for (const t of pending.values()) clearTimeout(t);
       io.close(() => {
         db.close();

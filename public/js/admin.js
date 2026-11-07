@@ -1,4 +1,4 @@
-import { parsePolls } from './import.js';
+import { parsePolls, toImportText } from './import.js';
 import { t as tr, lang, translatePage, langSwitch } from './i18n.js';
 
 translatePage();
@@ -73,7 +73,10 @@ function render() {
   if (!$('#cert-form').contains(document.activeElement)) {
     $('#cert-issuer').value = ev.settings.certIssuer || '';
     $('#cert-min').value = ev.settings.certMinScore || 0;
+    $('#cert-intro').value = ev.settings.certIntro || '';
   }
+  $('#cert-score').checked = ev.settings.certShowScore !== false;
+  if (document.activeElement !== $('#privacy-text') && !privacyDirty) $('#privacy-text').value = ev.settings.privacy || '';
   $('#cert-count').textContent = tr('{n} emise', { n: state.certificates });
 
   const mine = storage('quizy:events', []);
@@ -87,6 +90,7 @@ function render() {
   renderLeaderboard();
   renderTest();
   renderScenario();
+  renderParticipants();
 }
 
 function renderScreen() {
@@ -227,10 +231,128 @@ function renderLeaderboard() {
 
 // ---------- settings ----------
 $('#cert-enabled').addEventListener('change', (e) => act('event:update', { settings: { certEnabled: e.target.checked } }));
+$('#cert-score').addEventListener('change', (e) => act('event:update', { settings: { certShowScore: e.target.checked } }));
 $('#cert-form').addEventListener('submit', (e) => {
   e.preventDefault();
-  act('event:update', { settings: { certIssuer: $('#cert-issuer').value, certMinScore: Number($('#cert-min').value) || 0 } })
+  act('event:update', { settings: { certIssuer: $('#cert-issuer').value, certMinScore: Number($('#cert-min').value) || 0, certIntro: $('#cert-intro').value } })
     .then((r) => r && toast(tr('Salvat.')));
+});
+
+// ---------- privacy notice ----------
+const PRIVACY_RO = `Informare privind prelucrarea datelor personale
+
+Operator: [numele instituției], [adresa], [e-mail de contact].
+Ce date prelucrăm: numele pe care îl introduci (opțional), răspunsurile la întrebări și la teste, scorurile și întrebările trimise în timpul sesiunii.
+Scopul: desfășurarea sesiunii de instruire, măsurarea progresului și emiterea certificatului de participare.
+Certificatul: dacă îl descarci, numele, evenimentul, data și scorul pot fi verificate de oricine are codul certificatului.
+Cât timp: datele se păstrează până la [data / numărul de zile după încheierea programului], apoi se șterg.
+Drepturile tale: acces, rectificare, ștergere și opoziție, la [e-mail de contact]. Te poți adresa și Autorității Naționale de Supraveghere a Prelucrării Datelor cu Caracter Personal (ANSPDCP).
+Nu ai nevoie de cont, iar numele este opțional.`;
+const PRIVACY_EN = `Personal data notice
+
+Controller: [organisation name], [address], [contact e-mail].
+What we process: the name you enter (optional), your answers to questions and tests, your scores and the questions you send during the session.
+Purpose: running the training session, measuring progress and issuing the certificate of participation.
+Certificate: if you download one, anyone with its code can check your name, the event, the date and the score.
+How long: the data is kept until [date / number of days after the programme ends], then deleted.
+Your rights: access, rectification, erasure and objection, at [contact e-mail]. You can also contact your national data protection authority.
+You do not need an account, and your name is optional.`;
+let privacyDirty = false;
+$('#privacy-text').addEventListener('input', () => { privacyDirty = true; });
+$('#privacy-example').addEventListener('click', () => {
+  if ($('#privacy-text').value.trim() && !confirm(tr('Înlocuiești textul actual cu textul standard?'))) return;
+  $('#privacy-text').value = lang === 'ro' ? PRIVACY_RO : PRIVACY_EN;
+  privacyDirty = true;
+  $('#privacy-text').focus();
+});
+$('#privacy-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const text = $('#privacy-text').value;
+  if (/\[[^\]]+\]/.test(text) && !confirm(tr('Textul mai are câmpuri între paranteze drepte, de completat. Salvezi așa?'))) return;
+  if (await act('event:update', { settings: { privacy: text } })) { privacyDirty = false; toast(tr('Salvat.')); }
+});
+
+// ---------- participants ----------
+let participants = null;
+let participantsLoading = false;
+async function loadParticipants() {
+  if (participantsLoading) return;
+  participantsLoading = true;
+  const res = await act('participants:list');
+  participantsLoading = false;
+  if (res) { participants = res.participants; drawParticipants(); }
+}
+$('#participants-box').addEventListener('toggle', (e) => { if (e.target.open) loadParticipants(); });
+let participantsTimer;
+function renderParticipants() {
+  // While the list is open, refresh it (at most every 2 s) as people answer.
+  if (!$('#participants-box').open) return;
+  clearTimeout(participantsTimer);
+  participantsTimer = setTimeout(loadParticipants, 2000);
+}
+function drawParticipants() {
+  $('#participant-count').textContent = votersLabel(participants.length);
+  if (!participants.length) return fill($('#participants'), h('p', { class: 'muted small', style: { margin: 0 } }, tr('Încă nu a participat nimeni.')));
+  const pct = (v) => (v === null ? '–' : `${v}%`);
+  fill($('#participants'), h('div', { class: 'table-wrap' }, h('table', { class: 'events' },
+    h('thead', {}, h('tr', {}, [tr('Nume'), tr('Răspunsuri'), tr('Test inițial'), tr('Test final'), tr('Certificat'), ''].map((c) => h('th', {}, c)))),
+    h('tbody', {}, participants.map((p) => h('tr', {},
+      h('td', {}, p.name || h('span', { class: 'muted' }, tr('Anonim')), p.questions ? h('div', { class: 'small muted' }, tr('{n} întrebări din public', { n: p.questions })) : null),
+      h('td', { class: 'num' }, p.answers),
+      h('td', { class: 'num' }, pct(p.pre)),
+      h('td', { class: 'num' }, pct(p.post)),
+      h('td', {}, p.certificate ? h('code', {}, p.certificate) : h('span', { class: 'muted' }, '–')),
+      h('td', {}, h('button', { class: 'sm ghost danger', type: 'button', onclick: async () => {
+        if (!confirm(tr('Ștergi participantul „{name}” cu toate răspunsurile lui{cert}?', { name: p.name || tr('Anonim'), cert: p.certificate ? tr(' și certificatul') : '' }))) return;
+        if (await act('participant:delete', { id: p.id })) { toast(tr('Participantul a fost șters.')); loadParticipants(); }
+      } }, tr('Șterge')))))))));
+}
+
+// ---------- duplicate / reset ----------
+$('#duplicate-event').addEventListener('click', async () => {
+  const name = prompt(tr('Numele evenimentului nou (copia):'), `${state.event.name} (${tr('copie')})`);
+  if (name === null) return;
+  const res = await act('event:duplicate', { name });
+  if (!res) return;
+  const mine = storage('quizy:events', []);
+  mine.unshift({ code: res.code, key: res.adminKey, name: name.trim(), at: Date.now() });
+  store('quizy:events', mine.slice(0, 50));
+  toast(tr('Am creat copia. O deschid acum.'));
+  setTimeout(() => { location.href = `/admin/${res.code}#key=${res.adminKey}`; }, 600);
+});
+$('#reset-event').addEventListener('click', async () => {
+  const typed = prompt(tr('Se șterg toate răspunsurile, întrebările din public, scorurile și certificatele emise (codurile lor nu mai pot fi verificate). Întrebările și setările rămân. Scrie codul evenimentului ({code}) ca să confirmi:', { code: state.event.code }));
+  if (typed?.trim().toUpperCase() !== state.event.code) return;
+  if (await act('event:reset')) { toast(tr('Rezultatele au fost șterse.')); if (participants) loadParticipants(); }
+});
+
+// ---------- export in the import format ----------
+function showExport(title, text, filename) {
+  const form = $('#editor');
+  const area = h('textarea', { rows: 14, readonly: true, value: text, style: { fontFamily: 'ui-monospace, monospace', fontSize: '.85rem' } });
+  form.onsubmit = (e) => e.preventDefault();
+  fill(form,
+    h('div', { class: 'row between' }, h('h2', { style: { margin: 0 } }, title),
+      h('button', { type: 'button', class: 'ghost sm', onclick: () => form.classList.add('hidden') }, '✕')),
+    h('p', { class: 'small muted', style: { margin: 0 } }, tr('Textul e în formatul de la „Import în bloc”: îl poți lipi în alt eveniment.')),
+    area,
+    h('div', { class: 'row' },
+      h('button', { type: 'button', class: 'primary', onclick: () => copy(text) }, tr('Copiază')),
+      h('button', { type: 'button', onclick: () => {
+        const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+        h('a', { href: url, download: filename }).click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } }, tr('Descarcă .txt'))));
+  form.classList.remove('hidden');
+  form.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+$('#export-polls').addEventListener('click', () => {
+  if (!state.polls.length) return toast(tr('Niciun sondaj încă.'), true);
+  showExport(tr('Export sondaje și quiz-uri'), toImportText(state.polls), `intrebari-${state.event.code}.txt`);
+});
+$('#export-test').addEventListener('click', () => {
+  if (!state.testQuestions.length) return toast(tr('Testul nu are încă întrebări.'), true);
+  showExport(tr('Export întrebările testului'), toImportText(state.testQuestions.map((q) => ({ ...q, type: 'quiz' }))), `test-${state.event.code}.txt`);
 });
 $('#code-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -576,12 +698,38 @@ function renderTest() {
   }
 
   $('#test-questions-summary').textContent = tr('Întrebările testului ({n})', { n: tq.length });
+  // Don't redraw under the organizer's cursor while they edit a question.
+  if ($('#test-questions').contains(document.activeElement) && document.activeElement.tagName === 'TEXTAREA') return;
   fill($('#test-questions'), ...tq.map((q, i) => h('div', { class: 'poll-item' },
-    h('div', { class: 'row between' },
+    editingTest === q.id ? testEditForm(q) : [
       h('div', { class: 'q' }, `${i + 1}. ${q.question}`),
-      h('button', { class: 'sm ghost danger', type: 'button', onclick: () => confirm(tr('Ștergi întrebarea din test și răspunsurile ei?')) && act('poll:delete', { id: q.id }) }, tr('Șterge'))),
-    h('ul', { class: 'small', style: { margin: '.3rem 0 0', paddingLeft: '1.2rem' } },
-      q.options.map((o, j) => h('li', { style: q.correct.includes(j) ? { color: 'var(--ok)', fontWeight: 600 } : {} }, o, q.correct.includes(j) ? ' ✓' : ''))))));
+      h('ul', { class: 'small', style: { margin: '.3rem 0 .4rem', paddingLeft: '1.2rem' } },
+        q.options.map((o, j) => h('li', { style: q.correct.includes(j) ? { color: 'var(--ok)', fontWeight: 600 } : {} }, o, q.correct.includes(j) ? ' ✓' : ''))),
+      h('div', { class: 'row' },
+        h('button', { class: 'sm', type: 'button', onclick: () => { editingTest = q.id; renderTest(); $(`#test-edit-${q.id}`)?.focus(); } }, tr('Editează')),
+        h('button', { class: 'sm ghost', type: 'button', disabled: i === 0, 'aria-label': tr('Mută sus'), onclick: () => act('poll:move', { id: q.id, direction: 'up' }) }, '↑'),
+        h('button', { class: 'sm ghost', type: 'button', disabled: i === tq.length - 1, 'aria-label': tr('Mută jos'), onclick: () => act('poll:move', { id: q.id, direction: 'down' }) }, '↓'),
+        h('button', { class: 'sm ghost danger', type: 'button', onclick: () => confirm(tr('Ștergi întrebarea din test și răspunsurile ei?')) && act('poll:delete', { id: q.id }) }, tr('Șterge'))),
+    ])));
+}
+
+let editingTest = null;
+function testEditForm(q) {
+  const area = h('textarea', { id: `test-edit-${q.id}`, rows: Math.max(4, q.options.length + 2), style: { fontFamily: 'ui-monospace, monospace', fontSize: '.85rem' },
+    value: toImportText([{ ...q, type: 'quiz' }]) });
+  const form = h('form', { class: 'stack' },
+    h('label', { for: `test-edit-${q.id}` }, tr('Întrebarea pe primul rând, apoi opțiunile; „*” marchează răspunsul corect.')),
+    area,
+    h('div', { class: 'row' },
+      h('button', { type: 'submit', class: 'sm primary' }, tr('Salvează')),
+      h('button', { type: 'button', class: 'sm ghost', onclick: () => { editingTest = null; renderTest(); } }, tr('Renunță'))));
+  form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const [p, extra] = parsePolls(area.value);
+    if (!p || extra) return toast(tr('Scrie o singură întrebare, cu opțiunile ei.'), true);
+    if (await act('poll:update', { id: q.id, poll: { ...p, type: 'quiz' } })) { editingTest = null; toast(tr('Salvat.')); renderTest(); }
+  });
+  return form;
 }
 
 

@@ -45,6 +45,16 @@
         <label class="check"><input type="checkbox" id="open-creation"> <span data-i18n>Oricine poate crea evenimente de pe pagina principală</span></label>
         <p class="small muted" style="margin:0" data-i18n>Dacă debifezi, doar cine e autentificat în acest panou poate crea evenimente noi.</p>
       </div>
+      <form id="retention-form" class="card stack" style="margin-bottom:1rem">
+        <h2 style="margin:0" data-i18n>Ștergerea automată a datelor</h2>
+        <div class="row">
+          <label for="retention-days" style="margin:0" data-i18n>Șterge evenimentele închise după</label>
+          <input id="retention-days" type="number" min="0" max="3650" style="width:6.5rem">
+          <span data-i18n>zile</span>
+          <button type="submit" class="sm" data-i18n>Salvează</button>
+        </div>
+        <p class="small muted" style="margin:0" data-i18n>0 = nu se șterg automat. Se numără de când evenimentul e marcat „închis” din pagina lui de administrare; se șterge tot: întrebări, răspunsuri, certificate. Descarcă raportul înainte.</p>
+      </form>
       <div id="events"></div>
     </div>
   </main>

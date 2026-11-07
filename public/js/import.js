@@ -74,3 +74,25 @@ export function parsePolls(text) {
   finish();
   return polls;
 }
+
+// The reverse of parsePolls: polls back to the same text, so a question set can be copied
+// from one event and pasted into another with „Import în bloc”.
+const TAG = { wordcloud: '[nor]', open: '', ranking: '[clasament]', pin: '[pin]' };
+
+export function toImportText(polls) {
+  return polls.map((p) => {
+    const type = p.type || 'quiz';
+    const lines = [];
+    // A question that starts like an option or a [tag] would be read back differently.
+    let head = p.question.replace(/\s*\n\s*/g, ' ').trim().replace(/^([-–•*]\s+|\[)+/, '');
+    if (type === 'choice' && p.multi) head = `[multiplu] ${head}`;
+    else if (type === 'rating') head = `[nota ${p.scale || 5}] ${head}`;
+    else if (type === 'scale') head = `[likert${(p.scale || 5) === 5 ? '' : ` ${p.scale}`}] ${head}`;
+    else if (TAG[type]) head = `${TAG[type]} ${head}`;
+    if (type === 'quiz' && p.timeLimit) head += ` [${p.timeLimit}s]`;
+    lines.push(head);
+    const correct = new Set(p.correct || []);
+    for (const [i, o] of (p.options || []).entries()) lines.push(`${type === 'quiz' && correct.has(i) ? '*' : '-'} ${o}`);
+    return lines.join('\n');
+  }).join('\n\n');
+}

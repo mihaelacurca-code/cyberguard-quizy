@@ -21,12 +21,59 @@ function renderName() {
   $('#ask-as').textContent = name() ? t('Trimiți ca {name}', { name: name() }) : t('Trimiți anonim');
 }
 $('#name-btn').addEventListener('click', () => {
-  const next = prompt(t('Numele tău (opțional, apare la quiz și la întrebări):'), name());
-  if (next === null) return;
-  store('quizy:name', next.trim().slice(0, 40));
-  renderName();
+  editingName = true;
+  welcomeKey = '';
+  render();
+  $('#welcome-name')?.focus();
 });
 renderName();
+
+// ---------- welcome: name (and privacy notice) on the page, not in a browser prompt ----------
+// Shown once per event, and again if the privacy notice changes. The name button reopens it.
+let editingName = false;
+let welcomeKey = '';
+const textHash = (s) => { let x = 5381; for (const c of s) x = ((x * 33) ^ c.codePointAt(0)) >>> 0; return x.toString(36); };
+const seenKey = () => `quizy:welcome:${state.event.code}`;
+const welcomeDone = () => storage(seenKey(), null) === textHash(state.event.settings.privacy || '');
+
+function renderWelcome() {
+  const box = $('#welcome');
+  const show = editingName || !welcomeDone();
+  box.classList.toggle('hidden', !show);
+  if (!show) { welcomeKey = ''; return false; }
+  const s = state.event.settings;
+  const key = JSON.stringify([editingName, s.privacy, s.certEnabled, me.certificate]);
+  if (key === welcomeKey || (box.contains(document.activeElement) && document.activeElement.tagName === 'INPUT')) return true;
+  welcomeKey = key;
+  const input = h('input', { type: 'text', id: 'welcome-name', maxlength: '40', autocomplete: 'name', value: name(),
+    placeholder: t(s.certEnabled ? 'Prenume și nume' : 'Numele tău') });
+  const hint = me.certificate
+    ? t('Certificatul a fost emis pe numele „{name}” și nu se mai poate schimba.', { name: me.certificateName || name() })
+    : t(s.certEnabled ? 'Apare în clasament, la întrebări și pe certificat.' : 'Apare în clasament și la întrebări. Poți participa și fără nume.');
+  const done = (withName) => {
+    if (withName) store('quizy:name', input.value.replace(/\s+/g, ' ').trim().slice(0, 40));
+    store(seenKey(), textHash(s.privacy || ''));
+    editingName = false;
+    welcomeKey = '';
+    renderName();
+    render();
+  };
+  box.onsubmit = (e) => { e.preventDefault(); done(true); };
+  fill(box,
+    h('h2', { style: { margin: 0 } }, t(editingName ? 'Numele tău' : 'Bine ai venit!')),
+    editingName ? null : h('p', { class: 'muted', style: { margin: 0 } }, state.event.name),
+    s.privacy && !editingName ? h('div', { class: 'note privacy-note' }, h('div', { class: 'scenario-text small' }, s.privacy)) : null,
+    h('div', {},
+      h('label', { for: 'welcome-name' }, t(s.certEnabled ? 'Numele complet, așa cum va apărea pe certificat' : 'Numele tău (opțional)')),
+      input,
+      h('p', { class: 'small muted', style: { margin: '.35rem 0 0' } }, hint)),
+    h('div', { class: 'row' },
+      h('button', { class: 'primary', type: 'submit' }, t(editingName ? 'Salvează' : s.privacy ? 'Am citit și intru' : 'Intră')),
+      editingName
+        ? h('button', { class: 'ghost', type: 'button', onclick: () => { editingName = false; welcomeKey = ''; render(); } }, t('Renunță'))
+        : h('button', { class: 'ghost', type: 'button', onclick: () => done(false) }, t('Continuă fără nume'))));
+  return true;
+}
 
 const socket = connect({
   code,
@@ -89,6 +136,8 @@ function render() {
   renderPoll();
   renderQuestions();
   renderCert();
+  // Until the participant has seen the welcome (name, privacy notice), it is all they see.
+  if (renderWelcome()) ['#tabs', '#tab-poll', '#tab-qa'].forEach((id) => $(id).classList.add('hidden'));
 }
 
 let lastRound;
@@ -191,26 +240,22 @@ function renderTest() {
 }
 
 // ---------- certificate ----------
+let certForm = false;
 function renderCert() {
   const box = $('#cert');
   if (!state.event.settings.certEnabled) { box.classList.add('hidden'); return; }
   box.classList.remove('hidden');
-  if (box.dataset.key === String(me.certificate)) return;
-  box.dataset.key = String(me.certificate);
-  const btn = h('button', { class: 'primary', type: 'button' }, t(me.certificate ? 'Descarcă din nou certificatul' : 'Obține certificatul'));
-  btn.addEventListener('click', async () => {
-    let full = name();
-    if (!me.certificate && full.trim().length < 3) {
-      const typed = prompt(t('Numele complet, așa cum apare pe certificat:'), full);
-      if (typed === null) return;
-      full = typed.trim().slice(0, 40);
-      store('quizy:name', full);
-      renderName();
-    }
+  const key = `${me.certificate}:${certForm}`;
+  if (box.dataset.key === key || (box.contains(document.activeElement) && document.activeElement.tagName === 'INPUT')) return;
+  box.dataset.key = key;
+
+  const issue = async (full, btn) => {
     btn.disabled = true;
     try {
       const { certificate } = await socket.call('certificate', { name: full });
       me.certificate = certificate.id;
+      me.certificateName = certificate.name;
+      certForm = false;
       await downloadCertificate(certificate);
       box.dataset.key = '';
       renderCert();
@@ -219,11 +264,52 @@ function renderCert() {
     } finally {
       btn.disabled = false;
     }
+  };
+
+  // Before the certificate is issued, the participant confirms the exact name printed on it.
+  if (certForm && !me.certificate) {
+    const input = h('input', { type: 'text', id: 'cert-name', maxlength: '40', autocomplete: 'name', value: name(), placeholder: t('Prenume și nume') });
+    const warn = h('p', { class: 'note small hidden', style: { margin: 0 } });
+    const btn = h('button', { class: 'primary', type: 'submit' }, t('Emite certificatul'));
+    let confirmedSingle = '';
+    const form = h('form', { class: 'stack' },
+      h('h2', { style: { margin: 0 } }, t('🎓 Certificat de participare')),
+      h('div', {},
+        h('label', { for: 'cert-name' }, t('Numele complet, așa cum va apărea pe certificat')),
+        input,
+        h('p', { class: 'small muted', style: { margin: '.35rem 0 0' } }, t('Verifică ortografia și diacriticele. După emitere, numele nu se mai poate schimba.'))),
+      warn,
+      h('div', { class: 'row' }, btn, h('button', { class: 'ghost', type: 'button', onclick: () => { certForm = false; box.dataset.key = ''; renderCert(); } }, t('Renunță'))));
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const full = input.value.replace(/\s+/g, ' ').trim().slice(0, 40);
+      if (full.length < 3) { input.focus(); return toast(t('Scrie-ți numele complet pentru certificat.'), true); }
+      if (full.split(' ').length < 2 && confirmedSingle !== full) {
+        confirmedSingle = full;
+        warn.textContent = t('Ai scris un singur cuvânt. Pe certificat va apărea exact „{name}”. Dacă e corect, apasă din nou „Emite certificatul”.', { name: full });
+        warn.classList.remove('hidden');
+        return;
+      }
+      store('quizy:name', full);
+      renderName();
+      issue(full, btn);
+    });
+    fill(box, form);
+    input.focus();
+    return;
+  }
+
+  const btn = h('button', { class: 'primary', type: 'button' }, t(me.certificate ? 'Descarcă din nou certificatul' : 'Obține certificatul'));
+  btn.addEventListener('click', () => {
+    if (me.certificate) return issue(me.certificateName || name(), btn);
+    certForm = true;
+    box.dataset.key = '';
+    renderCert();
   });
-  fill(box, 
+  fill(box,
     h('h2', {}, t('🎓 Certificat de participare')),
     h('p', { class: 'muted small' }, me.certificate
-      ? t('Certificatul tău a fost emis. Îl poți descărca oricând din nou.')
+      ? t('Certificatul a fost emis pe numele „{name}”. Îl poți descărca oricând din nou.', { name: me.certificateName || name() })
       : t('Descarcă un certificat PDF cu numele tău. Numele nu se mai poate schimba după emitere.')),
     btn);
 }
