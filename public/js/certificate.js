@@ -77,7 +77,7 @@ export async function drawCertificate(cert) {
 
   ctx.fillStyle = '#a4abc8';
   ctx.font = '400 44px system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif';
-  ctx.fillText(t('Se acordă lui / ei'), W / 2, 700);
+  ctx.fillText(t('Se acordă dlui / dnei'), W / 2, 700);
 
   ctx.fillStyle = '#ffffff';
   fitText(ctx, cert.name, W - 500, 120, 800);

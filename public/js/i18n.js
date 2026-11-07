@@ -248,7 +248,7 @@ const EN = {
 
   // certificate
   'CERTIFICAT DE PARTICIPARE': 'CERTIFICATE OF PARTICIPATION',
-  'Se acordă lui / ei': 'Awarded to',
+  'Se acordă dlui / dnei': 'Awarded to',
   'pentru participarea la': 'for taking part in',
   'Scor la testul final: {score}%': 'Final test score: {score}%',
   'Emis de': 'Issued by',
