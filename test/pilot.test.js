@@ -185,3 +185,11 @@ test('export writes the import format back', () => {
     if (a.timeLimit) assert.equal(b.timeLimit, a.timeLimit);
   });
 });
+
+test('repeated options are refused, with a clear message', async () => {
+  const { store, ev } = setup();
+  assert.throws(() => store.createPolls(ev(), [{ type: 'choice', question: 'Cine?', options: ['Public authority', 'public  authority ', 'Vendor'] }]), /Întrebarea 1: Opțiunea „public authority” apare de două ori/);
+  assert.throws(() => store.createPolls(ev(), [{ type: 'scale', question: 'Cât?', options: ['A', 'a'] }]), /Afirmația „a” apare de două ori/);
+  const { toEnglish } = await import('../server/i18n.js');
+  assert.equal(toEnglish('Întrebarea 2: Opțiunea „X” apare de două ori.'), 'Question 2: The option "X" appears twice.');
+});

@@ -31,6 +31,7 @@ const RULES = [
   [/^Pasul „(.+)” are o singură opțiune\. Adaugă încă una, sau niciuna dacă e un final\.$/, (m) => `Step "${m[1]}" has only one option. Add another, or none if it is an ending.`],
   [/^Pasul „(.+)” are prea multe opțiuni \(cel mult (\d+)\)\.$/, (m) => `Step "${m[1]}" has too many options (at most ${m[2]}).`],
   [/^Un scenariu poate avea cel mult (\d+) de pași\.$/, (m) => `A scenario can have at most ${m[1]} steps.`],
+  [/^(Opțiunea|Afirmația) „(.+)” apare de două ori\.$/s, (m) => `${m[1] === 'Opțiunea' ? 'The option' : 'The statement'} "${m[2]}" appears twice.`],
   [/^(.+) lipsește\.$/, (m) => `${label(m[1])} is missing.`],
   [/^(.+) poate avea cel mult (\d+) caractere\.$/, (m) => `${label(m[1])} can be at most ${m[2]} characters.`],
   [/^Cel mult (\d+) opțiuni\.$/, (m) => `At most ${m[1]} options.`],

@@ -469,6 +469,16 @@ export function createStore(db) {
     return p;
   }
 
+  // Two options with the same text would split the votes and confuse the room.
+  function noRepeats(items, what) {
+    const seen = new Set();
+    for (const o of items) {
+      const k = o.toLocaleLowerCase('ro');
+      if (seen.has(k)) throw new UserError(`${what} „${o}” apare de două ori.`);
+      seen.add(k);
+    }
+  }
+
   function cleanPoll(data = {}) {
     const type = data.type;
     if (!POLL_TYPES.includes(type)) throw new UserError('Tip de sondaj necunoscut.');
@@ -480,6 +490,7 @@ export function createStore(db) {
         .filter(Boolean);
       if (options.length < 2) throw new UserError('Adaugă cel puțin două opțiuni.');
       if (options.length > LIMITS.options) throw new UserError(`Cel mult ${LIMITS.options} opțiuni.`);
+      noRepeats(options, 'Opțiunea');
       config.options = options;
     }
     if (type === 'choice') config.multi = Boolean(data.multi);
@@ -499,6 +510,7 @@ export function createStore(db) {
         .filter(Boolean);
       if (items.length < (type === 'scale' ? 1 : 2)) throw new UserError(type === 'scale' ? 'Adaugă cel puțin o afirmație.' : 'Adaugă cel puțin două opțiuni.');
       if (items.length > max) throw new UserError(`Cel mult ${max} ${what}.`);
+      noRepeats(items, type === 'scale' ? 'Afirmația' : 'Opțiunea');
       config.options = items;
     }
     if (type === 'scale') {
