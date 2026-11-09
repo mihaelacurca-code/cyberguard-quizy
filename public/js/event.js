@@ -11,7 +11,9 @@ let me = { votes: {}, upvotes: [], score: null };
 let tab = 'poll';
 let sort = 'top';
 let skew = 0;
-let pollKey = '';
+// One card per open poll; each remembers what it last drew so typing is not interrupted.
+const pollKeys = new Map();
+const timers = new Map();
 let revealedSeen = new Set();
 
 const name = () => storage('quizy:name', '');
@@ -119,10 +121,11 @@ function render() {
   $('#qa-count').textContent = state.questions.filter((q) => q.status === 'visible').length || '';
   $('#ask').classList.toggle('hidden', state.event.settings.closed);
 
-  const p = state.poll;
-  if (p?.type === 'quiz' && p.revealed && !revealedSeen.has(p.id)) {
-    revealedSeen.add(p.id);
-    socket.call('me').then((r) => { me = r.me; pollKey = ''; renderPoll(); }).catch(() => {});
+  for (const p of openPolls()) {
+    if (p.type === 'quiz' && p.revealed && !revealedSeen.has(p.id)) {
+      revealedSeen.add(p.id);
+      socket.call('me').then((r) => { me = r.me; pollKeys.delete(p.id); renderPoll(); }).catch(() => {});
+    }
   }
   // When a test round closes, fetch this participant's score for it.
   const round = state.event.settings.testRound || null;
@@ -314,29 +317,51 @@ function renderCert() {
     btn);
 }
 
-// ---------- poll ----------
+// ---------- polls: every open poll gets its own card, newest first ----------
+const openPolls = () => state.polls || (state.poll ? [state.poll] : []);
+
 function renderPoll() {
-  const box = $('#poll');
-  const p = state.poll;
-  const mine = p ? me.votes[p.id] || [] : [];
-  const key = JSON.stringify([p?.id, p?.status, p?.revealed, p?.showResults, mine, state.event.settings.closed]);
-  if (key === pollKey) {
+  const wrap = $('#poll');
+  const polls = openPolls();
+  if (!polls.length) {
+    pollKeys.clear();
+    timers.forEach(clearInterval); timers.clear();
+    if (wrap.dataset.empty !== String(state.event.settings.closed)) {
+      wrap.dataset.empty = String(state.event.settings.closed);
+      fill(wrap, h('div', { class: 'card empty' },
+        h('h2', {}, t(state.event.settings.closed ? 'Evenimentul s-a încheiat' : 'Niciun sondaj activ acum')),
+        h('p', {}, t(state.event.settings.closed ? 'Mulțumim pentru participare!' : 'Pagina se actualizează singură când începe următorul.'))));
+    }
+    return;
+  }
+  delete wrap.dataset.empty;
+  const ids = new Set(polls.map((p) => String(p.id)));
+  for (const card of [...wrap.children]) {
+    if (!ids.has(card.dataset.poll)) { card.remove(); pollKeys.delete(Number(card.dataset.poll)); clearInterval(timers.get(Number(card.dataset.poll))); timers.delete(Number(card.dataset.poll)); }
+  }
+  polls.forEach((p, i) => {
+    let card = wrap.querySelector(`:scope > [data-poll="${p.id}"]`);
+    if (!card) card = h('div', { class: 'card poll-card', 'data-poll': String(p.id) });
+    if (wrap.children[i] !== card) wrap.insertBefore(card, wrap.children[i] || null);
+    renderOnePoll(p, card, polls.length);
+  });
+}
+
+function renderOnePoll(p, box, count) {
+  const mine = me.votes[p.id] || [];
+  const key = JSON.stringify([p.status, p.revealed, p.showResults, mine, state.event.settings.closed, count > 1]);
+  if (key === pollKeys.get(p.id)) {
     // Only the numbers moved; keep whatever the participant is typing.
     const res = box.querySelector('[data-results]');
-    if (res && p) fill(res, renderResults(p));
+    if (res) fill(res, renderResults(p));
     return;
   }
-  pollKey = key;
-
-  if (!p) {
-    fill(box, h('div', { class: 'empty' },
-      h('h2', {}, t(state.event.settings.closed ? 'Evenimentul s-a încheiat' : 'Niciun sondaj activ acum')),
-      h('p', {}, t(state.event.settings.closed ? 'Mulțumim pentru participare!' : 'Pagina se actualizează singură când începe următorul.'))));
-    return;
-  }
+  pollKeys.set(p.id, key);
 
   const answered = mine.length > 0;
-  const parts = [h('div', { class: 'row between' }, h('span', { class: 'badge live' }, t('Live')), timerEl(p))];
+  const parts = [h('div', { class: 'row between' },
+    h('div', { class: 'row' }, h('span', { class: 'badge live' }, t('Live')), count > 1 && mine.length ? h('span', { class: 'small muted' }, t('✓ ai răspuns')) : null),
+    timerEl(p))];
   parts.push(h('h2', { class: 'poll-q', style: { marginTop: '.75rem' } }, p.question));
   parts.push(pollImage(p));
 
@@ -418,18 +443,18 @@ function pinForm(p, mine) {
   return box;
 }
 
-let timerInterval;
 function timerEl(p) {
-  clearInterval(timerInterval);
+  clearInterval(timers.get(p.id));
+  timers.delete(p.id);
   if (!p.timeLimit || p.status !== 'live' || p.revealed) return h('span');
   const el = h('span', { class: 'timer' });
   const tick = () => {
     const left = timeLeft(p, skew);
     el.textContent = `⏱ ${left}s`;
-    if (left === 0) { clearInterval(timerInterval); pollKey = ''; renderPoll(); }
+    if (left === 0) { clearInterval(timers.get(p.id)); timers.delete(p.id); pollKeys.delete(p.id); renderPoll(); }
   };
   tick();
-  timerInterval = setInterval(tick, 250);
+  timers.set(p.id, setInterval(tick, 250));
   return el;
 }
 
@@ -438,7 +463,7 @@ async function send(p, value, btn) {
   try {
     const res = await socket.call('vote', { pollId: p.id, value, name: name() });
     me = res.me;
-    pollKey = '';
+    pollKeys.delete(p.id);
     renderPoll();
   } catch (e) {
     toast(e.message, true);

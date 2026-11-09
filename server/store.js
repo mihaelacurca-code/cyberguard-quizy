@@ -52,6 +52,8 @@ const DEFAULT_SETTINGS = {
   privacy: '',
   // When the event was closed; closed events can be deleted automatically after a while.
   closedAt: 0,
+  // Which open poll the projector shows (null = the newest one).
+  presentPoll: null,
   scenario: null,
   // Per-event look: client logo (stored separately), accent color, background, product brand.
   brand: { color: '', background: 'neon', hideProduct: false, logo: 0 },
@@ -123,7 +125,8 @@ export function createStore(db) {
     polls: q("SELECT * FROM polls WHERE event_id = ? AND kind = '' ORDER BY position, id"),
     testPolls: q("SELECT * FROM polls WHERE event_id = ? AND kind = 'test' ORDER BY position, id"),
     poll: q('SELECT * FROM polls WHERE id = ? AND event_id = ?'),
-    livePoll: q("SELECT * FROM polls WHERE event_id = ? AND kind = '' AND status = 'live' LIMIT 1"),
+    // Newest first: several polls can be open at once; the most recently opened leads.
+    livePolls: q("SELECT * FROM polls WHERE event_id = ? AND kind = '' AND status = 'live' ORDER BY opened_at DESC, id DESC"),
     maxPos: q('SELECT COALESCE(MAX(position), -1) AS m FROM polls WHERE event_id = ? AND kind = ?'),
     insertPoll: q(`INSERT INTO polls (event_id, type, question, config, show_results, position, created_at, kind)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)`),
@@ -379,7 +382,7 @@ export function createStore(db) {
       db.prepare('DELETE FROM certificates WHERE event_id = ?').run(ev.id);
       db.prepare('DELETE FROM scenario_votes WHERE scenario_id IN (SELECT id FROM scenarios WHERE event_id = ?)').run(ev.id);
       db.prepare('DELETE FROM scenario_runs WHERE scenario_id IN (SELECT id FROM scenarios WHERE event_id = ?)').run(ev.id);
-      patchSettings(ev, { testRound: null, scenario: null, screen: 'join' });
+      patchSettings(ev, { testRound: null, scenario: null, screen: 'join', presentPoll: null });
     });
   }
 
@@ -627,20 +630,46 @@ export function createStore(db) {
     tx(() => list.forEach((p, idx) => st.setPos.run(idx, p.id)));
   }
 
-  function setPollStatus(ev, pollId, status) {
+  // Starting a poll normally closes the one that was live. With keepOthers, the polls already
+  // open stay open too (participants answer them in any order); the new one goes on screen.
+  function setPollStatus(ev, pollId, status, { keepOthers = false } = {}) {
     const p = requirePoll(ev, pollId);
     if (!['draft', 'live', 'closed'].includes(status)) throw new UserError('Stare necunoscută.');
     if (p.kind === 'test') throw new UserError('Întrebările de test se deschid împreună, din secțiunea Test.');
     if (status === 'live' && p.type === 'pin' && !p.config.image) throw new UserError('Încarcă întâi imaginea pe care participanții pun pinul.');
     tx(() => {
       if (status === 'live') {
-        st.closeLive.run(ev.id);
-        st.setStatus.run('live', now(), p.id);
+        if (!keepOthers) st.closeLive.run(ev.id);
+        st.setStatus.run('live', p.status === 'live' ? p.opened_at : now(), p.id);
       } else {
         st.setStatus.run(status, p.opened_at, p.id);
       }
     });
-    if (status === 'live') updateEvent(getEvent(ev.code), { settings: { screen: 'poll' } });
+    if (status === 'live') patchSettings(getEvent(ev.code), { screen: 'poll', presentPoll: p.id });
+  }
+
+  function closeAllPolls(ev) {
+    st.closeLive.run(ev.id);
+  }
+
+  // Which poll the projector shows when several are open.
+  function showPollOnScreen(ev, pollId) {
+    const p = requirePoll(ev, pollId);
+    if (p.kind === 'test') throw new UserError('Întrebările de test se deschid împreună, din secțiunea Test.');
+    patchSettings(ev, { screen: 'poll', presentPoll: p.id });
+  }
+
+  // The poll on the projector: the one the organizer picked, else the newest open one, else the
+  // last one that ran (the screen keeps showing it after it closes).
+  function shownPoll(ev, live) {
+    const pick = ev.settings.presentPoll;
+    if (pick) {
+      const p = hydratePoll(st.poll.get(Number(pick), ev.id));
+      if (p && p.kind === '' && (p.status === 'live' || !live.length)) return p;
+    }
+    if (live.length) return live[0];
+    const all = st.polls.all(ev.id).map(hydratePoll).filter((p) => p.opened_at);
+    return all.sort((a, b) => b.opened_at - a.opened_at)[0] || null;
   }
 
   function setShowResults(ev, pollId, show) {
@@ -1218,12 +1247,15 @@ export function createStore(db) {
   const sortQuestions = (list) => list.sort((a, b) => (b.highlighted - a.highlighted) || (b.votes - a.votes) || (b.at - a.at));
 
   function audienceState(ev) {
-    const live = hydratePoll(st.livePoll.get(ev.id));
+    const lives = st.livePolls.all(ev.id).map(hydratePoll);
+    const live = lives[0] || null;
     const visible = sortQuestions(questions(ev).filter((x) => x.status === 'visible' || x.status === 'answered')).slice(0, 500);
     const round = ev.settings.testRound;
     return {
       event: { code: ev.code, name: ev.name, settings: ev.settings },
       poll: live ? publicPoll(live, { withResults: live.show_results || live.revealed }) : null,
+      // every open poll, newest first (poll is the first of them)
+      polls: lives.map((p) => publicPoll(p, { withResults: p.show_results || p.revealed })),
       questions: visible,
       leaderboard: ev.settings.screen === 'leaderboard' ? leaderboard(ev, 10).map(({ id, ...r }) => r) : null,
       scenario: scenarioView(ev),
@@ -1242,13 +1274,7 @@ export function createStore(db) {
   }
 
   function presenterState(ev) {
-    const live = hydratePoll(st.livePoll.get(ev.id));
-    // The projected screen keeps showing the last poll after it closes.
-    let shown = live;
-    if (!shown) {
-      const all = st.polls.all(ev.id).map(hydratePoll).filter((p) => p.opened_at);
-      shown = all.sort((a, b) => b.opened_at - a.opened_at)[0] || null;
-    }
+    const shown = shownPoll(ev, st.livePolls.all(ev.id).map(hydratePoll));
     const visible = sortQuestions(questions(ev).filter((x) => x.status === 'visible')).slice(0, 30);
     return {
       event: { code: ev.code, name: ev.name, settings: ev.settings },
@@ -1261,8 +1287,10 @@ export function createStore(db) {
   }
 
   function adminState(ev) {
+    const onScreen = shownPoll(ev, st.livePolls.all(ev.id).map(hydratePoll));
     return {
       event: { code: ev.code, name: ev.name, settings: ev.settings, createdAt: ev.created_at },
+      onScreen: onScreen ? onScreen.id : null,
       polls: st.polls.all(ev.id).map(hydratePoll).map((p) => ({
         ...publicPoll(p, { withResults: true }),
         correct: p.config.correct,
@@ -1367,6 +1395,7 @@ export function createStore(db) {
     setPollImage, removePollImage, getPollImage,
     createScenario, deleteScenario, startScenario, scenarioVote, revealScenario, advanceScenario, backScenario, stopScenario, scenarioView, scenarioRuns,
     createPoll, createPolls, updatePoll, duplicatePoll, deletePoll, movePoll, setPollStatus, setShowResults, revealQuiz, resetPoll,
+    closeAllPolls, showPollOnScreen,
     vote, results, leaderboard,
     ask, toggleUpvote, moderate,
     audienceState, presenterState, adminState, personalState, exportRows,

@@ -193,3 +193,37 @@ test('repeated options are refused, with a clear message', async () => {
   const { toEnglish } = await import('../server/i18n.js');
   assert.equal(toEnglish('Întrebarea 2: Opțiunea „X” apare de două ori.'), 'Question 2: The option "X" appears twice.');
 });
+
+test('several polls can stay open; the projector shows the chosen one', () => {
+  const { store, code, ev } = setup();
+  const [a, b, c] = store.createPolls(ev(), [
+    { type: 'choice', question: 'A?', options: ['x', 'y'] },
+    { type: 'rating', question: 'B?' },
+    { type: 'open', question: 'C?' },
+  ]);
+  store.setPollStatus(ev(), a, 'live');
+  store.setPollStatus(ev(), b, 'live', { keepOthers: true });
+  let aud = store.audienceState(ev());
+  assert.deepEqual(aud.polls.map((p) => p.id), [b, a]); // newest first
+  assert.equal(aud.poll.id, b);
+  assert.equal(store.presenterState(ev()).poll.id, b);
+  // answers go to either open poll
+  store.vote(code, a, A, '', [0]);
+  store.vote(code, b, A, '', [4]);
+  // the organizer puts the older one back on screen
+  store.showPollOnScreen(ev(), a);
+  assert.equal(store.presenterState(ev()).poll.id, a);
+  assert.equal(store.adminState(ev()).onScreen, a);
+  // starting without keepOthers closes the open ones (the classic behaviour)
+  store.setPollStatus(ev(), c, 'live');
+  aud = store.audienceState(ev());
+  assert.deepEqual(aud.polls.map((p) => p.id), [c]);
+  assert.equal(store.presenterState(ev()).poll.id, c);
+  assert.throws(() => store.vote(code, a, B, '', [1]), /nu mai primește/);
+  // close all
+  store.setPollStatus(ev(), a, 'live', { keepOthers: true });
+  store.closeAllPolls(ev());
+  assert.deepEqual(store.audienceState(ev()).polls, []);
+  // the projector keeps showing the last chosen poll after everything closes
+  assert.equal(store.presenterState(ev()).poll.id, a);
+});

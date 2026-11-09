@@ -129,12 +129,19 @@ function renderPolls() {
     fill(box, h('div', { class: 'card empty' }, h('p', {}, tr('Niciun sondaj încă.')), h('p', { class: 'small' }, tr('Creează primul sondaj sau quiz cu butonul de mai sus.'))));
     return;
   }
-  fill(box, ...state.polls.map((p, idx) => {
+  const liveCount = state.polls.filter((p) => p.status === 'live').length;
+  const head = liveCount > 1 ? h('div', { class: 'note row between', style: { marginBottom: '.6rem' } },
+    h('span', { class: 'small' }, tr('{n} sondaje deschise în același timp. Participanții le văd pe toate; proiectorul îl arată pe cel marcat „Pe ecran”.', { n: liveCount })),
+    h('button', { class: 'sm', type: 'button', onclick: () => act('poll:close-all') }, tr('■ Închide toate'))) : null;
+  fill(box, head, ...state.polls.map((p, idx) => {
     const isLive = p.status === 'live';
+    const onScreen = state.onScreen === p.id && state.event.settings.screen === 'poll';
     const actions = [
       isLive
         ? h('button', { class: 'sm', type: 'button', onclick: () => act('poll:status', { id: p.id, status: 'closed' }) }, tr('■ Oprește'))
-        : h('button', { class: 'sm primary', type: 'button', onclick: () => act('poll:status', { id: p.id, status: 'live' }) }, tr(p.status === 'closed' ? '▶ Redeschide' : '▶ Pornește')),
+        : h('button', { class: 'sm primary', type: 'button', title: liveCount ? tr('Închide sondajul deschis acum și îl pornește pe acesta') : '', onclick: () => act('poll:status', { id: p.id, status: 'live' }) }, tr(p.status === 'closed' ? '▶ Redeschide' : '▶ Pornește')),
+      !isLive && liveCount ? h('button', { class: 'sm', type: 'button', onclick: () => act('poll:status', { id: p.id, status: 'live', keepOthers: true }) }, tr('+ Pornește și lasă-le deschise pe celelalte')) : null,
+      isLive && liveCount > 1 ? h('button', { class: onScreen ? 'sm primary' : 'sm', type: 'button', 'aria-pressed': String(onScreen), onclick: () => act('poll:on-screen', { id: p.id }) }, tr(onScreen ? '● Pe ecran' : 'Arată pe ecran')) : null,
     ];
     if (p.type === 'pin' && p.region) {
       actions.push(h('button', { class: 'sm', type: 'button', onclick: () => act('poll:reveal', { id: p.id, revealed: !p.revealed }) },
