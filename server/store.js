@@ -1,6 +1,6 @@
 // Domain logic: events, polls, votes, Q&A. Everything here is synchronous
 // (node:sqlite) and knows nothing about HTTP or sockets.
-import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
 import { parseScenario } from './scenario.js';
 
 export class UserError extends Error {}
@@ -110,7 +110,16 @@ export function createStore(db) {
   const q = (sql) => db.prepare(sql);
   const st = {
     eventByCode: q('SELECT * FROM events WHERE code = ?'),
-    insertEvent: q('INSERT INTO events (code, name, admin_hash, settings, created_at) VALUES (?, ?, ?, ?, ?)'),
+    insertEvent: q('INSERT INTO events (code, name, admin_hash, settings, created_at, owner_id) VALUES (?, ?, ?, ?, ?, ?)'),
+    setOwner: q('UPDATE events SET owner_id = ? WHERE id = ?'),
+    users: q(`SELECT u.id, u.username, u.name, u.created_at, (SELECT COUNT(*) FROM events e WHERE e.owner_id = u.id) AS events
+              FROM users u ORDER BY u.name COLLATE NOCASE`),
+    user: q('SELECT * FROM users WHERE id = ?'),
+    userByName: q('SELECT * FROM users WHERE username = ?'),
+    insertUser: q('INSERT INTO users (username, name, pass_hash, created_at) VALUES (?, ?, ?, ?)'),
+    setUserPass: q('UPDATE users SET pass_hash = ? WHERE id = ?'),
+    deleteUser: q('DELETE FROM users WHERE id = ?'),
+    orphanEvents: q('UPDATE events SET owner_id = NULL WHERE owner_id = ?'),
     updateEvent: q('UPDATE events SET name = ?, settings = ? WHERE id = ?'),
     setCode: q('UPDATE events SET code = ? WHERE id = ?'),
     setAdminHash: q('UPDATE events SET admin_hash = ? WHERE id = ?'),
@@ -119,6 +128,7 @@ export function createStore(db) {
                     (SELECT COUNT(DISTINCT participant_id) FROM (
                        SELECT v.participant_id FROM votes v JOIN polls p ON p.id = v.poll_id WHERE p.event_id = e.id
                        UNION SELECT participant_id FROM questions WHERE event_id = e.id)) AS participants
+                  , (SELECT u.name FROM users u WHERE u.id = e.owner_id) AS owner_name
                   FROM events e ORDER BY e.created_at DESC`),
     deleteEvent: q('DELETE FROM events WHERE id = ?'),
 
@@ -238,14 +248,14 @@ export function createStore(db) {
     return ev;
   }
 
-  function createEvent(name) {
+  function createEvent(name, ownerId = null) {
     const clean = text(name, LIMITS.eventName, 'Numele evenimentului');
     const adminKey = randomBytes(18).toString('base64url');
     for (let attempt = 0; attempt < 20; attempt++) {
       let code = '';
       for (let i = 0; i < 6; i++) code += CODE_ALPHABET[randomInt(CODE_ALPHABET.length)];
       if (st.eventByCode.get(code)) continue;
-      st.insertEvent.run(code, clean, hash(adminKey), JSON.stringify(DEFAULT_SETTINGS), now());
+      st.insertEvent.run(code, clean, hash(adminKey), JSON.stringify(DEFAULT_SETTINGS), now(), ownerId ?? null);
       return { code, adminKey };
     }
     throw new Error('Nu am putut genera un cod unic.');
@@ -342,8 +352,8 @@ export function createStore(db) {
 
   // A copy for the next session: questions, test, scenarios, look, certificate and privacy settings.
   // No answers, participants or certificates are copied.
-  function duplicateEvent(src, name) {
-    const { code, adminKey } = createEvent(name || `${src.name} (copie)`.slice(0, LIMITS.eventName));
+  function duplicateEvent(src, name, ownerId = src.owner_id) {
+    const { code, adminKey } = createEvent(name || `${src.name} (copie)`.slice(0, LIMITS.eventName), ownerId);
     const ev = getEvent(code);
     const s = src.settings;
     const settings = {
@@ -445,9 +455,87 @@ export function createStore(db) {
       const settings = { ...DEFAULT_SETTINGS, ...JSON.parse(e.settings) };
       return {
         code: e.code, name: e.name, createdAt: e.created_at, polls: e.polls,
+        ownerId: e.owner_id ?? null, ownerName: e.owner_id ? e.owner_name || null : null,
         participants: e.participants, closed: settings.closed, closedAt: settings.closedAt || 0, certificates: st.certCount.get(e.id).n,
       };
     });
+  }
+
+  // ---------- organizer accounts ----------
+  // Passwords are stored as scrypt hashes with a per-user salt.
+
+  function passHash(password) {
+    const salt = randomBytes(16);
+    return `scrypt$${salt.toString('hex')}$${scryptSync(password, salt, 32).toString('hex')}`;
+  }
+
+  function passOk(stored, password) {
+    const [kind, salt, want] = String(stored).split('$');
+    if (kind !== 'scrypt' || !salt || !want || typeof password !== 'string') return false;
+    const got = scryptSync(password, Buffer.from(salt, 'hex'), 32);
+    return timingSafeEqual(got, Buffer.from(want, 'hex'));
+  }
+
+  function cleanPassword(password) {
+    if (typeof password !== 'string' || password.length < 10) throw new UserError('Parola trebuie să aibă cel puțin 10 caractere.');
+    if (password.length > 200) throw new UserError('Parola este prea lungă.');
+    return password;
+  }
+
+  const newPassword = () => randomBytes(9).toString('base64url');
+
+  function createUser({ username, name, password } = {}) {
+    const u = typeof username === 'string' ? username.trim().toLowerCase() : '';
+    if (!/^[a-z0-9._-]{3,32}$/.test(u)) throw new UserError('Numele de utilizator: 3–32 de litere mici, cifre, „.”, „-” sau „_”, fără spații.');
+    if (u === 'admin') throw new UserError('Numele de utilizator „admin” este rezervat.');
+    if (st.userByName.get(u)) throw new UserError('Există deja un cont cu acest nume de utilizator.');
+    const display = text(name, 80, 'Numele');
+    const pass = password ? cleanPassword(password) : newPassword();
+    const r = st.insertUser.run(u, display, passHash(pass), now());
+    return { id: Number(r.lastInsertRowid), username: u, name: display, password: pass };
+  }
+
+  function listUsers() {
+    return st.users.all().map((u) => ({ id: u.id, username: u.username, name: u.name, createdAt: u.created_at, events: u.events }));
+  }
+
+  function requireUser(id) {
+    const u = st.user.get(Number(id));
+    if (!u) throw new UserError('Contul nu există.');
+    return u;
+  }
+
+  function verifyUser(username, password) {
+    const u = typeof username === 'string' ? st.userByName.get(username.trim().toLowerCase()) : null;
+    return u && passOk(u.pass_hash, password) ? { id: u.id, username: u.username, name: u.name } : null;
+  }
+
+  // The administrator resets a password (a new one is generated); a user changes their own.
+  function resetPassword(id) {
+    const u = requireUser(id);
+    const pass = newPassword();
+    st.setUserPass.run(passHash(pass), u.id);
+    return pass;
+  }
+
+  function changePassword(id, current, next) {
+    const u = requireUser(id);
+    if (!passOk(u.pass_hash, current)) throw new UserError('Parola actuală nu este corectă.');
+    st.setUserPass.run(passHash(cleanPassword(next)), u.id);
+  }
+
+  // The account goes; its events stay, without an owner, until the administrator gives them to someone.
+  function deleteUser(id) {
+    const u = requireUser(id);
+    tx(() => {
+      st.orphanEvents.run(u.id);
+      st.deleteUser.run(u.id);
+    });
+  }
+
+  function setEventOwner(ev, ownerId) {
+    if (ownerId !== null && ownerId !== 0) requireUser(ownerId);
+    st.setOwner.run(ownerId, ev.id);
   }
 
   function appSetting(key, fallback) {
@@ -1391,6 +1479,7 @@ export function createStore(db) {
   return {
     createEvent, getEvent, requireEvent, verifyAdmin, updateEvent, deleteEvent, changeCode, rotateAdminKey, listEvents, setLogo, removeLogo, getLogo,
     duplicateEvent, resetResults, participantList, deleteParticipant, purgeClosedEvents,
+    createUser, listUsers, verifyUser, resetPassword, changePassword, deleteUser, setEventOwner,
     appSetting, setAppSetting, testReport, issueCertificate, certificateView, replyToQuestion, reportData,
     setPollImage, removePollImage, getPollImage,
     createScenario, deleteScenario, startScenario, scenarioVote, revealScenario, advanceScenario, backScenario, stopScenario, scenarioView, scenarioRuns,

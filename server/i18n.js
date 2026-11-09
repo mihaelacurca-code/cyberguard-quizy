@@ -11,6 +11,7 @@ const LABELS = {
   'Textul de pe certificat': 'The certificate text',
   'Nota de informare': 'The privacy notice',
   'Eticheta': 'The label',
+  'Numele': 'The name',
 };
 
 const label = (ro) => LABELS[ro] || ro;
@@ -120,6 +121,18 @@ const EXACT = {
   'Logo-ul poate avea cel mult 500 KB.': 'The logo can be at most 500 KB.',
   'Cererea este prea mare.': 'The request is too large.',
   'Cerere invalidă.': 'Invalid request.',
+  'Evenimentul are deja un organizator.': 'This event already has an organizer.',
+  'Parola administratorului se schimbă pe server (ADMIN_PASSWORD).': 'The administrator password is changed on the server (ADMIN_PASSWORD).',
+  'Parola trebuie să aibă cel puțin 10 caractere.': 'The password must have at least 10 characters.',
+  'Parola este prea lungă.': 'The password is too long.',
+  'Numele de utilizator: 3–32 de litere mici, cifre, „.”, „-” sau „_”, fără spații.': 'Username: 3–32 lowercase letters, digits, ".", "-" or "_", no spaces.',
+  'Numele de utilizator „admin” este rezervat.': 'The username "admin" is reserved.',
+  'Există deja un cont cu acest nume de utilizator.': 'An account with this username already exists.',
+  'Contul nu există.': 'This account does not exist.',
+  'Parola actuală nu este corectă.': 'The current password is not correct.',
+  'Doar administratorul serverului poate face asta.': 'Only the server administrator can do this.',
+  'Evenimentul este al altui organizator.': 'This event belongs to another organizer.',
+  'Utilizator sau parolă greșită.': 'Wrong username or password.',
   'Numărul de zile trebuie să fie între 0 și 3650.': 'The number of days must be between 0 and 3650.',
 };
 

@@ -227,3 +227,82 @@ test('several polls can stay open; the projector shows the chosen one', () => {
   // the projector keeps showing the last chosen poll after everything closes
   assert.equal(store.presenterState(ev()).poll.id, a);
 });
+
+test('organizer accounts: each organizer sees and opens only their own events', async () => {
+  const { createApp } = await import('../server/app.js');
+  const { io: connect } = await import('socket.io-client');
+  const server = createApp({ adminPassword: 'parola-admin-serverului' });
+  await new Promise((r) => server.http.listen(0, r));
+  const base = `http://localhost:${server.http.address().port}`;
+  const post = (path, body, cookie) => fetch(base + path, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(cookie ? { cookie } : {}) }, body: JSON.stringify(body) });
+  const login = async (body) => { const r = await post('/api/panel/login', body); return r.ok ? r.headers.get('set-cookie').split(';')[0] : r.status; };
+  const join = (cookie, code) => new Promise((resolve) => {
+    const s = connect(base, { transports: ['websocket'], forceNew: true, extraHeaders: { cookie } });
+    s.on('connect', () => s.emit('join', { code, role: 'admin' }, (r) => { s.close(); resolve(r); }));
+  });
+  try {
+    const adminCookie = await login({ password: 'parola-admin-serverului' });
+    // the administrator creates two organizer accounts (passwords are generated and shown once)
+    const ana = await (await post('/api/panel/users', { username: 'Ana.Pop', name: 'Ana Pop' }, adminCookie)).json();
+    const dan = await (await post('/api/panel/users', { username: 'dan', name: 'Dan Ion' }, adminCookie)).json();
+    assert.equal(ana.username, 'ana.pop');
+    assert.ok(ana.password.length >= 10);
+    assert.equal((await post('/api/panel/users', { username: 'dan', name: 'Altul' }, adminCookie)).status, 400);
+    assert.equal(await login({ username: 'ana.pop', password: 'gresit-gresit' }), 403);
+    const anaCookie = await login({ username: 'ana.pop', password: ana.password });
+    const danCookie = await login({ username: 'dan', password: dan.password });
+    // organizers cannot manage accounts or server settings
+    assert.equal((await post('/api/panel/users', { username: 'x1x', name: 'X' }, anaCookie)).status, 403);
+    assert.equal((await post('/api/panel/settings', { openCreation: false }, anaCookie)).status, 403);
+
+    const anaEvent = await (await post('/api/events', { name: 'Sesiunea Anei' }, anaCookie)).json();
+    const danEvent = await (await post('/api/events', { name: 'Sesiunea lui Dan' }, danCookie)).json();
+    const list = async (cookie) => (await (await fetch(base + '/api/panel/events', { headers: { cookie } })).json()).events;
+    assert.deepEqual((await list(anaCookie)).map((e) => e.code), [anaEvent.code]);
+    assert.deepEqual((await list(danCookie)).map((e) => e.code), [danEvent.code]);
+    // the administrator sees both, with their organizer, but none is theirs
+    const all = await list(adminCookie);
+    assert.equal(all.length, 2);
+    assert.deepEqual(all.map((e) => e.ownerName).sort(), ['Ana Pop', 'Dan Ion']);
+    assert.ok(all.every((e) => !e.mine));
+    // and cannot take an organizer's event for themself
+    assert.equal((await post(`/api/panel/events/${anaEvent.code}/owner`, { ownerId: 0 }, adminCookie)).status, 400);
+    assert.ok((await join(adminCookie, anaEvent.code)).error);
+
+    // nobody gets into someone else's event: admin page, report, export, new link
+    assert.ok((await join(anaCookie, anaEvent.code)).ok);
+    assert.ok((await join(anaCookie, danEvent.code)).error);
+    assert.ok((await join(adminCookie, anaEvent.code)).error);
+    assert.equal((await fetch(`${base}/api/events/${danEvent.code}/report`, { headers: { cookie: anaCookie } })).status, 403);
+    assert.equal((await fetch(`${base}/api/events/${anaEvent.code}/report`, { headers: { cookie: adminCookie } })).status, 403);
+    assert.equal((await fetch(`${base}/api/events/${danEvent.code}/export.csv`, { headers: { cookie: anaCookie } })).status, 403);
+    assert.equal((await post(`/api/panel/events/${danEvent.code}/key`, {}, anaCookie)).status, 403);
+    assert.equal((await post(`/api/panel/events/${danEvent.code}/duplicate`, {}, anaCookie)).status, 403);
+    assert.equal((await fetch(`${base}/api/panel/events/${danEvent.code}`, { method: 'DELETE', headers: { cookie: anaCookie } })).status, 403);
+    // the admin link still works for whoever has it
+    assert.ok((await fetch(`${base}/api/events/${anaEvent.code}/report`, { headers: { 'X-Admin-Key': anaEvent.adminKey } })).ok);
+
+    // a duplicate belongs to whoever made it
+    const copy = await (await post(`/api/panel/events/${anaEvent.code}/duplicate`, { name: 'Copia Anei' }, anaCookie)).json();
+    assert.equal((await list(anaCookie)).length, 2);
+    assert.ok((await join(anaCookie, copy.code)).ok);
+
+    // the organizer changes their password; the old one stops working
+    assert.equal((await post('/api/panel/password', { current: 'nu-e-asta', next: 'parola-noua-ana-123' }, anaCookie)).status, 400);
+    assert.ok((await post('/api/panel/password', { current: ana.password, next: 'parola-noua-ana-123' }, anaCookie)).ok);
+    assert.equal(await login({ username: 'ana.pop', password: ana.password }), 403);
+    assert.equal(typeof await login({ username: 'ana.pop', password: 'parola-noua-ana-123' }), 'string');
+
+    // deleting an account ends its sessions; its events stay, without an owner, until reassigned
+    assert.ok((await fetch(`${base}/api/panel/users/${dan.id}`, { method: 'DELETE', headers: { cookie: adminCookie } })).ok);
+    assert.equal((await fetch(base + '/api/panel/events', { headers: { cookie: danCookie } })).status, 401);
+    const orphan = (await list(adminCookie)).find((e) => e.code === danEvent.code);
+    assert.equal(orphan.ownerId, null);
+    await post(`/api/panel/events/${danEvent.code}/owner`, { ownerId: 0 }, adminCookie);
+    assert.ok((await join(adminCookie, danEvent.code)).ok);
+    // the administrator can delete any event (to keep the server tidy)
+    assert.ok((await fetch(`${base}/api/panel/events/${copy.code}`, { method: 'DELETE', headers: { cookie: adminCookie } })).ok);
+  } finally {
+    await server.close();
+  }
+});

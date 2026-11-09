@@ -45,8 +45,10 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   });
 
   // ---------- organizer panel sessions ----------
-  // One password for the whole server (ADMIN_PASSWORD). A login gives an HttpOnly cookie that
-  // opens every event's admin page; sessions live in memory and end on restart or after 12 h.
+  // The server administrator signs in with ADMIN_PASSWORD (user 0) and creates organizer
+  // accounts. Everyone sees and manages only their own events; the administrator also sees the
+  // list of all events (name, organizer, dates) to keep the server tidy, but not their content.
+  // A login gives an HttpOnly cookie; sessions live in memory and end on restart or after 12 h.
   const SESSION_MS = 12 * 3_600_000;
   const sessions = new Map();
   const sha = (s) => createHash('sha256').update(String(s)).digest();
@@ -58,14 +60,25 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     }
     return '';
   };
-  const sessionValid = (token) => {
-    const exp = token && sessions.get(token);
-    if (!exp) return false;
-    if (exp < Date.now()) { sessions.delete(token); return false; }
-    return true;
+  // session: { exp, uid, name, username, super }
+  const sessionOf = (cookieHeader) => {
+    if (!adminPassword) return null;
+    const token = cookieValue(cookieHeader, 'quizy_panel');
+    const sess = token && sessions.get(token);
+    if (!sess) return null;
+    if (sess.exp < Date.now()) { sessions.delete(token); return null; }
+    return sess;
   };
-  const panelAuthed = (req) => Boolean(adminPassword) && sessionValid(cookieValue(req.get('cookie'), 'quizy_panel'));
-  const requirePanel = (req, res, next) => (panelAuthed(req) ? next() : res.status(401).json({ error: 'Autentifică-te în panoul de administrare.' }));
+  const endSessionsOf = (uid) => { for (const [k, v] of sessions) if (v.uid === uid) sessions.delete(k); };
+  const panelUser = (req) => sessionOf(req.get('cookie'));
+  const panelAuthed = (req) => Boolean(panelUser(req));
+  const requirePanel = (req, res, next) => {
+    req.user = panelUser(req);
+    return req.user ? next() : res.status(401).json({ error: 'Autentifică-te în panoul de administrare.' });
+  };
+  const requireSuper = (req, res, next) => requirePanel(req, res, () => (req.user.super ? next() : res.status(403).json({ error: 'Doar administratorul serverului poate face asta.' })));
+  // Only the event's own organizer gets in through a panel session (never someone else's event).
+  const owns = (user, ev) => Boolean(user && ev && ev.owner_id !== null && ev.owner_id !== undefined && ev.owner_id === user.uid);
   const openCreation = () => store.appSetting('openCreation', true);
 
   const page = (name) => (req, res) => res.sendFile(join(PUBLIC, name));
@@ -110,7 +123,8 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     if (!openCreation() && !panelAuthed(req)) return res.status(403).json({ error: 'Crearea de evenimente este rezervată administratorilor.' });
     if (!limits.create.take(req.ip)) return res.status(429).json({ error: 'Prea multe evenimente create într-o oră.' });
     try {
-      res.status(201).json(store.createEvent(req.body?.name));
+      const user = panelUser(req);
+      res.status(201).json(store.createEvent(req.body?.name, user ? user.uid : null));
     } catch (e) {
       sendError(res, e);
     }
@@ -127,7 +141,12 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   });
 
   // ---------- client logo ----------
-  const adminOf = (req) => store.verifyAdmin(req.params.code, req.get('x-admin-key')) || (panelAuthed(req) ? store.getEvent(req.params.code) : null);
+  const adminOf = (req) => {
+    const byKey = store.verifyAdmin(req.params.code, req.get('x-admin-key'));
+    if (byKey) return byKey;
+    const ev = store.getEvent(req.params.code);
+    return owns(panelUser(req), ev) ? ev : null;
+  };
 
   app.post('/api/events/:code/logo', express.raw({ type: () => true, limit: LOGO_MAX_BYTES + 1024 }), (req, res) => {
     if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări.' });
@@ -199,7 +218,7 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
 
   app.get('/api/events/:code/report', (req, res) => {
     if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări.' });
-    const ev = store.verifyAdmin(req.params.code, req.get('x-admin-key')) || (panelAuthed(req) ? store.getEvent(req.params.code) : null);
+    const ev = adminOf(req);
     if (!ev) {
       limits.miss.take(req.ip);
       return res.status(403).json({ error: 'Acces interzis.' });
@@ -210,7 +229,7 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
 
   app.get('/api/events/:code/export.csv', (req, res) => {
     if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări.' });
-    const ev = store.verifyAdmin(req.params.code, req.get('x-admin-key')) || (panelAuthed(req) ? store.getEvent(req.params.code) : null);
+    const ev = adminOf(req);
     if (!ev) {
       limits.miss.take(req.ip);
       return res.status(403).json({ error: 'Acces interzis.' });
@@ -245,12 +264,21 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   app.post('/api/panel/login', (req, res) => {
     if (!adminPassword) return res.status(404).json({ error: 'Panoul de administrare nu este configurat pe acest server.' });
     if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări greșite. Încearcă peste câteva minute.' });
-    if (!passwordOk(req.body?.password)) {
+    // No username (or "admin") = the server administrator; otherwise an organizer account.
+    const username = typeof req.body?.username === 'string' ? req.body.username.trim().toLowerCase() : '';
+    let sess = null;
+    if (!username || username === 'admin') {
+      if (passwordOk(req.body?.password)) sess = { uid: 0, name: 'Administrator', username: 'admin', super: true };
+    } else {
+      const u = store.verifyUser(username, req.body?.password);
+      if (u) sess = { uid: u.id, name: u.name, username: u.username, super: false };
+    }
+    if (!sess) {
       limits.miss.take(req.ip);
-      return res.status(403).json({ error: 'Parolă greșită.' });
+      return res.status(403).json({ error: username ? 'Utilizator sau parolă greșită.' : 'Parolă greșită.' });
     }
     const token = randomBytes(32).toString('base64url');
-    sessions.set(token, Date.now() + SESSION_MS);
+    sessions.set(token, { ...sess, exp: Date.now() + SESSION_MS });
     res.set('Set-Cookie', `quizy_panel=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${SESSION_MS / 1000}${req.secure ? '; Secure' : ''}`);
     res.json({ ok: true });
   });
@@ -261,13 +289,22 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     res.json({ ok: true });
   });
 
-  app.get('/api/panel/session', (req, res) => res.json({ configured: Boolean(adminPassword), authed: panelAuthed(req) }));
-
-  app.get('/api/panel/events', requirePanel, (req, res) => {
-    res.json({ events: store.listEvents(), openCreation: openCreation(), retentionDays: retentionDays() });
+  app.get('/api/panel/session', (req, res) => {
+    const u = panelUser(req);
+    res.json({ configured: Boolean(adminPassword), authed: Boolean(u), user: u ? { name: u.name, username: u.username, super: u.super } : null });
   });
 
-  app.post('/api/panel/settings', requirePanel, (req, res) => {
+  // Organizers get their own events; the administrator gets every event's name, organizer and
+  // dates (to keep the server tidy) and can open only the ones that are theirs.
+  app.get('/api/panel/events', requirePanel, (req, res) => {
+    const u = req.user;
+    const events = store.listEvents()
+      .filter((e) => u.super || e.ownerId === u.uid)
+      .map((e) => ({ ...e, mine: e.ownerId === u.uid }));
+    res.json({ events, openCreation: openCreation(), retentionDays: retentionDays(), users: u.super ? store.listUsers() : undefined });
+  });
+
+  app.post('/api/panel/settings', requireSuper, (req, res) => {
     if ('openCreation' in (req.body || {})) store.setAppSetting('openCreation', Boolean(req.body.openCreation));
     if ('retentionDays' in (req.body || {})) {
       const n = Number(req.body.retentionDays);
@@ -278,28 +315,96 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     res.json({ openCreation: openCreation(), retentionDays: retentionDays() });
   });
 
-  app.post('/api/panel/events/:code/duplicate', requirePanel, (req, res) => {
+  // The panel acts on an event only for its own organizer (deleting: the administrator too).
+  const panelEvent = (req, res, { superToo = false } = {}) => {
     const ev = store.getEvent(req.params.code);
-    if (!ev) return res.status(404).json({ error: 'Evenimentul nu există.' });
+    if (!ev) { res.status(404).json({ error: 'Evenimentul nu există.' }); return null; }
+    if (!owns(req.user, ev) && !(superToo && req.user.super)) { res.status(403).json({ error: 'Evenimentul este al altui organizator.' }); return null; }
+    return ev;
+  };
+
+  app.post('/api/panel/events/:code/duplicate', requirePanel, (req, res) => {
+    const ev = panelEvent(req, res);
+    if (!ev) return;
     try {
-      res.status(201).json(store.duplicateEvent(ev, req.body?.name));
+      res.status(201).json(store.duplicateEvent(ev, req.body?.name, req.user.uid));
     } catch (e) {
       sendError(res, e);
     }
   });
 
   app.post('/api/panel/events/:code/key', requirePanel, (req, res) => {
-    const ev = store.getEvent(req.params.code);
-    if (!ev) return res.status(404).json({ error: 'Evenimentul nu există.' });
+    const ev = panelEvent(req, res);
+    if (!ev) return;
     res.json({ code: ev.code, adminKey: store.rotateAdminKey(ev) });
   });
 
   app.delete('/api/panel/events/:code', requirePanel, (req, res) => {
-    const ev = store.getEvent(req.params.code);
-    if (!ev) return res.status(404).json({ error: 'Evenimentul nu există.' });
+    const ev = panelEvent(req, res, { superToo: true });
+    if (!ev) return;
     store.deleteEvent(ev);
     changed(ev.code);
     res.json({ ok: true });
+  });
+
+  // The administrator gives an event to an organizer (or to themself): events created before
+  // accounts existed have no owner and can then be opened from the panel again.
+  app.post('/api/panel/events/:code/owner', requireSuper, (req, res) => {
+    const ev = store.getEvent(req.params.code);
+    if (!ev) return res.status(404).json({ error: 'Evenimentul nu există.' });
+    // Only events without an organizer can be given out: taking someone's event would open it.
+    if (ev.owner_id !== null && ev.owner_id !== undefined) return res.status(400).json({ error: 'Evenimentul are deja un organizator.' });
+    const raw = req.body?.ownerId;
+    try {
+      store.setEventOwner(ev, raw === null || raw === undefined || raw === '' ? null : Number(raw));
+      res.json({ ok: true });
+    } catch (e) {
+      sendError(res, e);
+    }
+  });
+
+  // ---------- organizer accounts ----------
+  app.get('/api/panel/users', requireSuper, (req, res) => res.json({ users: store.listUsers() }));
+
+  app.post('/api/panel/users', requireSuper, (req, res) => {
+    try {
+      res.status(201).json(store.createUser({ username: req.body?.username, name: req.body?.name }));
+    } catch (e) {
+      sendError(res, e);
+    }
+  });
+
+  app.post('/api/panel/users/:id/password', requireSuper, (req, res) => {
+    try {
+      const password = store.resetPassword(req.params.id);
+      endSessionsOf(Number(req.params.id));
+      res.json({ password });
+    } catch (e) {
+      sendError(res, e);
+    }
+  });
+
+  app.delete('/api/panel/users/:id', requireSuper, (req, res) => {
+    try {
+      store.deleteUser(req.params.id);
+      endSessionsOf(Number(req.params.id));
+      res.json({ ok: true });
+    } catch (e) {
+      sendError(res, e);
+    }
+  });
+
+  // An organizer changes their own password.
+  app.post('/api/panel/password', requirePanel, (req, res) => {
+    if (req.user.super) return res.status(400).json({ error: 'Parola administratorului se schimbă pe server (ADMIN_PASSWORD).' });
+    if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări.' });
+    try {
+      store.changePassword(req.user.uid, req.body?.current, req.body?.next);
+      res.json({ ok: true });
+    } catch (e) {
+      if (e instanceof UserError) limits.miss.take(req.ip);
+      sendError(res, e);
+    }
   });
 
   app.get('/qr/:code.svg', async (req, res) => {
@@ -447,8 +552,12 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
       if (me().code) throw new UserError('Deja conectat.');
       if (!['admin', 'present', 'audience'].includes(role)) throw new UserError('Rol necunoscut.');
       if (limits.miss.blocked(ip)) throw new UserError('Prea multe încercări greșite. Încearcă peste câteva minute.');
-      const panel = role === 'admin' && Boolean(adminPassword) && sessionValid(cookieValue(socket.handshake.headers.cookie, 'quizy_panel'));
-      const ev = role === 'admin' ? (store.verifyAdmin(code, key) || (panel ? store.getEvent(code) : null)) : store.getEvent(code);
+      const panel = role === 'admin' ? sessionOf(socket.handshake.headers.cookie) : null;
+      let ev = role === 'admin' ? store.verifyAdmin(code, key) : store.getEvent(code);
+      if (!ev && role === 'admin' && panel) {
+        const own = store.getEvent(code);
+        if (owns(panel, own)) ev = own;
+      }
       if (!ev) {
         limits.miss.take(ip);
         throw new UserError(role === 'admin' ? 'Cheie de administrare invalidă.' : 'Evenimentul nu există.');
@@ -516,7 +625,8 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
         // Same rule as creating an event from the home page.
         if (!openCreation() && !me().panel) throw new UserError('Crearea de evenimente este rezervată administratorilor.');
         if (!limits.create.take(ip)) throw new UserError('Prea multe evenimente create într-o oră.');
-        return store.duplicateEvent(store.requireEvent(me().code), payload.name);
+        const src = store.requireEvent(me().code);
+        return store.duplicateEvent(src, payload.name, me().panel ? me().panel.uid : src.owner_id);
       }
       const fn = adminActions[action];
       if (!fn) throw new UserError('Acțiune necunoscută.');

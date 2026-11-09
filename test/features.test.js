@@ -158,11 +158,14 @@ test('panel: password, session cookie, event list, new admin key, closed creatio
 
     const list = await (await fetch(`${base}/api/panel/events`, jar)).json();
     assert.equal(list.events[0].code, code);
+    // An event without an owner opens only with its admin link, until the administrator takes it.
+    assert.equal((await fetch(`${base}/api/panel/events/${code}/key`, { method: 'POST', ...jar })).status, 403);
+    await fetch(`${base}/api/panel/events/${code}/owner`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...jar.headers }, body: '{"ownerId":0}' });
 
     const { adminKey } = await (await fetch(`${base}/api/panel/events/${code}/key`, { method: 'POST', ...jar })).json();
     assert.ok(server.store.verifyAdmin(code, adminKey));
 
-    // A panel session opens any admin page without the key.
+    // A panel session opens the organizer's own admin pages without the key.
     const s = connect(base, { transports: ['websocket'], forceNew: true, extraHeaders: jar.headers });
     await new Promise((r) => s.on('connect', r));
     const joined = await new Promise((r) => s.emit('join', { code, role: 'admin' }, r));

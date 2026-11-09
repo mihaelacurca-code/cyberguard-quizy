@@ -106,6 +106,15 @@ CREATE TABLE IF NOT EXISTS event_assets (
   PRIMARY KEY (event_id, kind)
 );
 
+-- Organizer accounts. The server administrator (ADMIN_PASSWORD) is not a row: it is user 0.
+CREATE TABLE IF NOT EXISTS users (
+  id          INTEGER PRIMARY KEY,
+  username    TEXT NOT NULL UNIQUE,
+  name        TEXT NOT NULL,
+  pass_hash   TEXT NOT NULL,
+  created_at  INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS app_settings (
   key   TEXT PRIMARY KEY,
   value TEXT NOT NULL
@@ -119,6 +128,9 @@ const COLUMNS = [
   ['votes', 'round', "TEXT NOT NULL DEFAULT ''"],
   ['questions', 'reply', "TEXT NOT NULL DEFAULT ''"],
   ['questions', 'replied_at', 'INTEGER'],
+  // Who runs the event: a user id, 0 for the server administrator, NULL for events created
+  // without an account (reachable only with their admin link).
+  ['events', 'owner_id', 'INTEGER'],
 ];
 
 function migrate(db) {

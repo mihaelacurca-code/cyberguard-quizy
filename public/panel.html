@@ -13,6 +13,7 @@
     <a class="brand" href="/"><img src="/img/cyberguard-mark.svg" alt="" width="22" height="35"><span>CYBERGUARD <b>Quizy</b></span></a>
     <div class="row">
       <span id="lang-slot"></span>
+      <span id="whoami" class="small muted hidden"></span>
       <button id="logout" class="sm hidden" type="button" data-i18n>Ieșire</button>
     </div>
   </header>
@@ -27,6 +28,11 @@
     <form id="login" class="card stack hidden" style="max-width:420px;margin:3rem auto">
       <h1 data-i18n>Panou de administrare</h1>
       <div>
+        <label for="username" data-i18n>Utilizator</label>
+        <input id="username" type="text" autocomplete="username" autocapitalize="none" spellcheck="false" maxlength="32">
+        <p class="small muted" style="margin:.3rem 0 0" data-i18n>Administratorul serverului lasă câmpul gol sau scrie „admin”.</p>
+      </div>
+      <div>
         <label for="password" data-i18n>Parola</label>
         <input id="password" type="password" autocomplete="current-password" required>
       </div>
@@ -35,15 +41,37 @@
 
     <div id="app" class="hidden">
       <div class="row between" style="margin:1rem 0">
-        <h1 style="margin:0" data-i18n>Toate evenimentele</h1>
+        <h1 id="events-title" style="margin:0"></h1>
         <form id="create" class="row">
           <input id="event-name" type="text" maxlength="120" placeholder="Numele evenimentului" data-i18n-placeholder required>
           <button class="primary" type="submit" data-i18n>Creează evenimentul</button>
         </form>
       </div>
+      <div id="events"></div>
+
+      <div id="users-card" class="card stack hidden" style="margin-top:1.5rem">
+        <h2 style="margin:0" data-i18n>Conturi de organizator</h2>
+        <p class="small muted" style="margin:0" data-i18n>Fiecare organizator intră cu propriul cont și vede doar evenimentele lui. Tu vezi lista tuturor evenimentelor, dar nu le poți deschide pe ale altora.</p>
+        <form id="user-form" class="row">
+          <input id="user-name" class="grow" type="text" maxlength="80" placeholder="Nume și prenume" data-i18n-placeholder required>
+          <input id="user-username" class="grow" type="text" maxlength="32" placeholder="utilizator (ex. ana.pop)" data-i18n-placeholder autocapitalize="none" spellcheck="false" required>
+          <button class="primary" type="submit" data-i18n>Creează contul</button>
+        </form>
+        <div id="user-secret" class="note hidden"></div>
+        <div id="users"></div>
+      </div>
+
+      <form id="password-form" class="card stack hidden" style="margin-top:1.5rem;max-width:520px">
+        <h2 style="margin:0" data-i18n>Schimbă parola</h2>
+        <div><label for="pw-current" data-i18n>Parola actuală</label><input id="pw-current" type="password" autocomplete="current-password" required></div>
+        <div><label for="pw-next" data-i18n>Parola nouă (cel puțin 10 caractere)</label><input id="pw-next" type="password" autocomplete="new-password" minlength="10" required></div>
+        <button type="submit" data-i18n>Schimbă parola</button>
+      </form>
+
+      <div id="server-settings" class="hidden" style="margin-top:1.5rem">
       <div class="card stack" style="margin-bottom:1rem">
         <label class="check"><input type="checkbox" id="open-creation"> <span data-i18n>Oricine poate crea evenimente de pe pagina principală</span></label>
-        <p class="small muted" style="margin:0" data-i18n>Dacă debifezi, doar cine e autentificat în acest panou poate crea evenimente noi.</p>
+        <p class="small muted" style="margin:0" data-i18n>Dacă debifezi, doar cine are cont în acest panou poate crea evenimente noi (recomandat).</p>
       </div>
       <form id="retention-form" class="card stack" style="margin-bottom:1rem">
         <h2 style="margin:0" data-i18n>Ștergerea automată a datelor</h2>
@@ -55,7 +83,7 @@
         </div>
         <p class="small muted" style="margin:0" data-i18n>0 = nu se șterg automat. Se numără de când evenimentul e marcat „închis” din pagina lui de administrare; se șterge tot: întrebări, răspunsuri, certificate. Descarcă raportul înainte.</p>
       </form>
-      <div id="events"></div>
+      </div>
     </div>
   </main>
   <script type="module" src="/js/panel.js"></script>
