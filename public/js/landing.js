@@ -41,10 +41,36 @@ $('#create').addEventListener('submit', async (e) => {
   }
 });
 
-const mine = storage('quizy:events', []);
-if (mine.length) {
-  $('#mine').classList.remove('hidden');
-  $('#mine-list').append(...mine.map((ev) => h('div', { class: 'row between' },
+// Events this browser created or opened as organizer (with their admin keys). They live only
+// in this browser's storage; on a shared computer the organizer can remove them here.
+function renderMine() {
+  const mine = storage('quizy:events', []);
+  $('#mine').classList.toggle('hidden', !mine.length);
+  const forget = (code) => {
+    store('quizy:events', storage('quizy:events', []).filter((e) => e.code !== code));
+    renderMine();
+  };
+  $('#mine-list').replaceChildren(...mine.map((ev) => h('div', { class: 'row between mine-row' },
     h('div', { class: 'grow' }, h('strong', {}, ev.name), ' ', h('span', { class: 'muted small' }, ev.code)),
-    h('a', { class: 'btn sm', href: `/admin/${ev.code}#key=${ev.key}` }, t('Administrează')))));
+    h('div', { class: 'row', style: { flexWrap: 'nowrap' } },
+      h('a', { class: 'btn sm', href: `/admin/${ev.code}#key=${ev.key}` }, t('Administrează')),
+      h('button', {
+        class: 'sm ghost', type: 'button', title: t('Scoate de pe acest dispozitiv'), 'aria-label': t('Scoate „{name}” de pe acest dispozitiv', { name: ev.name }),
+        onclick: () => {
+          if (!confirm(t('Scoți „{name}” din lista de pe acest dispozitiv? Evenimentul nu se șterge; îl redeschizi cu linkul de administrare sau din panou.', { name: ev.name }))) return;
+          forget(ev.code);
+          toast(t('Am scos evenimentul de pe acest dispozitiv.'));
+        },
+      }, '✕')))),
+  mine.length > 1 ? h('div', { class: 'row', style: { justifyContent: 'flex-end' } },
+    h('button', {
+      class: 'sm ghost danger', type: 'button',
+      onclick: () => {
+        if (!confirm(t('Uiți toate evenimentele de pe acest dispozitiv? Ele nu se șterg; le redeschizi cu linkurile de administrare sau din panou.'))) return;
+        store('quizy:events', []);
+        renderMine();
+        toast(t('Lista a fost golită pe acest dispozitiv.'));
+      },
+    }, t('Uită toate'))) : null);
 }
+renderMine();
