@@ -300,6 +300,10 @@ test('organizer accounts: each organizer sees and opens only their own events', 
     assert.equal(orphan.ownerId, null);
     await post(`/api/panel/events/${danEvent.code}/owner`, { ownerId: 0 }, adminCookie);
     assert.ok((await join(adminCookie, danEvent.code)).ok);
+    // and can hand their own event to an organizer, who then opens it (and the administrator no longer can)
+    assert.ok((await post(`/api/panel/events/${danEvent.code}/owner`, { ownerId: ana.id }, adminCookie)).ok);
+    assert.ok((await join(anaCookie, danEvent.code)).ok);
+    assert.ok((await join(adminCookie, danEvent.code)).error);
     // the administrator can delete any event (to keep the server tidy)
     assert.ok((await fetch(`${base}/api/panel/events/${copy.code}`, { method: 'DELETE', headers: { cookie: adminCookie } })).ok);
   } finally {

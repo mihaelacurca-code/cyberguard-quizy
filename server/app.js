@@ -352,8 +352,9 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
   app.post('/api/panel/events/:code/owner', requireSuper, (req, res) => {
     const ev = store.getEvent(req.params.code);
     if (!ev) return res.status(404).json({ error: 'Evenimentul nu există.' });
-    // Only events without an organizer can be given out: taking someone's event would open it.
-    if (ev.owner_id !== null && ev.owner_id !== undefined) return res.status(400).json({ error: 'Evenimentul are deja un organizator.' });
+    // Only events without an organizer, or the administrator's own, can be given out: taking an
+    // organizer's event would open it.
+    if (ev.owner_id !== null && ev.owner_id !== undefined && ev.owner_id !== req.user.uid) return res.status(400).json({ error: 'Evenimentul are deja un organizator.' });
     const raw = req.body?.ownerId;
     try {
       store.setEventOwner(ev, raw === null || raw === undefined || raw === '' ? null : Number(raw));

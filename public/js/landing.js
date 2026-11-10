@@ -1,4 +1,4 @@
-import { $, h, toast, storage, store } from './common.js';
+import { $, h, toast, storage, store, fill } from './common.js';
 import { t, lang, translatePage, langSwitch } from './i18n.js';
 
 translatePage();
@@ -50,7 +50,7 @@ function renderMine() {
     store('quizy:events', storage('quizy:events', []).filter((e) => e.code !== code));
     renderMine();
   };
-  $('#mine-list').replaceChildren(...mine.map((ev) => h('div', { class: 'row between mine-row' },
+  fill($('#mine-list'), ...mine.map((ev) => h('div', { class: 'row between mine-row' },
     h('div', { class: 'grow' }, h('strong', {}, ev.name), ' ', h('span', { class: 'muted small' }, ev.code)),
     h('div', { class: 'row', style: { flexWrap: 'nowrap' } },
       h('a', { class: 'btn sm', href: `/admin/${ev.code}#key=${ev.key}` }, t('Administrează')),

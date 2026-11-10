@@ -106,7 +106,14 @@ async function load() {
       h('td', {}, h('strong', {}, ev.name), ev.closed ? h('span', { class: 'badge', style: { marginLeft: '.4rem' } }, t('Închis')) : null,
         ev.closed && retention > 0 && ev.closedAt ? h('div', { class: 'small muted' }, t('Se șterge automat pe {date}', { date: fmt(ev.closedAt + retention * 86_400_000) })) : null),
       h('td', {}, h('code', {}, ev.code)),
-      me.super ? h('td', {}, owner(ev)) : null,
+      // The administrator gives out events without an organizer, and their own events (e.g. to the
+      // colleague who runs them); an organizer's event cannot be taken.
+      me.super ? h('td', {}, ev.ownerId === null || ev.ownerId === 0
+        ? h('select', { 'aria-label': t('Organizator'), style: { width: 'auto', padding: '.3rem .5rem' }, onchange: (e) => assign(ev, e.target.value) },
+          h('option', { value: '', selected: ev.ownerId === null }, t('Fără organizator')),
+          h('option', { value: '0', selected: ev.ownerId === 0 }, t('Eu (administrator)')),
+          users.map((u) => h('option', { value: String(u.id), selected: ev.ownerId === u.id }, u.name)))
+        : owner(ev)) : null,
       h('td', { class: 'muted' }, fmt(ev.createdAt)),
       h('td', { class: 'num' }, ev.participants),
       h('td', { class: 'num' }, ev.polls),
@@ -122,10 +129,7 @@ async function load() {
         // someone else's event: the administrator only sees it (and can delete it). An event without
         // an organizer (created before accounts, or whose account was deleted) can be given to someone.
         : h('div', { class: 'row', style: { flexWrap: 'nowrap' } },
-          ev.ownerId !== null ? h('span', { class: 'small muted' }, t('Doar organizatorul îl poate deschide.')) : h('select', { 'aria-label': t('Organizator'), style: { width: 'auto', padding: '.3rem .5rem' }, onchange: (e) => assign(ev, e.target.value) },
-            h('option', { value: '', selected: ev.ownerId === null }, t('Fără organizator')),
-            h('option', { value: '0', selected: ev.ownerId === 0 }, t('Eu (administrator)')),
-            users.map((u) => h('option', { value: String(u.id), selected: ev.ownerId === u.id }, u.name))),
+          h('span', { class: 'small muted' }, t(ev.ownerId === null ? 'Alege organizatorul în coloana „Organizator”.' : 'Doar organizatorul îl poate deschide.')),
           h('button', { class: 'sm ghost danger', type: 'button', onclick: () => remove(ev) }, t('Șterge'))))))))));
 }
 

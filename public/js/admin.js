@@ -27,6 +27,7 @@ function showError(msg) {
   err.classList.remove('hidden');
   fill(err, 
     h('h2', {}, key ? msg : tr('Lipsește cheia de administrare. Deschide linkul de administrare primit la crearea evenimentului.')),
+    h('p', { class: 'muted' }, tr('Dacă ai cont de organizator, intră în panou și deschide evenimentul de acolo. Dacă linkul a fost înlocuit cu unul nou („Link nou de administrare”), cel vechi nu mai funcționează: cere linkul nou organizatorului sau administratorului.')),
     h('div', { class: 'row' },
       h('a', { class: 'btn', href: '/' }, tr('Pagina principală')),
       h('a', { class: 'btn', href: '/panel' }, tr('Panoul de administrare'))));

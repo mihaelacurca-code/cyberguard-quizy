@@ -346,6 +346,8 @@ const EN = {
   'Niciun cont încă.': 'No accounts yet.',
   'Parola a fost schimbată.': 'The password was changed.',
   'Doar organizatorul îl poate deschide.': 'Only its organizer can open it.',
+  'Alege organizatorul în coloana „Organizator”.': 'Choose the organizer in the "Organizer" column.',
+  'Dacă ai cont de organizator, intră în panou și deschide evenimentul de acolo. Dacă linkul a fost înlocuit cu unul nou („Link nou de administrare”), cel vechi nu mai funcționează: cere linkul nou organizatorului sau administratorului.': 'If you have an organizer account, sign in to the panel and open the event from there. If the link was replaced by a new one ("New admin link"), the old one no longer works: ask the organizer or the administrator for the new link.',
   'Prezentul certificat se acordă': 'This certificate is awarded to',
   'pentru participarea la': 'for taking part in',
   'Scor la testul final: {score}%': 'Final test score: {score}%',
