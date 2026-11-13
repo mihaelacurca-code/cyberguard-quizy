@@ -9,6 +9,7 @@ import { openDb } from './db.js';
 import { createStore, UserError, LOGO_MAX_BYTES, IMAGE_MAX_BYTES } from './store.js';
 import { localize, pickLang } from './i18n.js';
 import { SCENARIO_EXAMPLE } from './scenario.js';
+import { reportPdf } from './report-pdf.js';
 
 const PUBLIC = fileURLToPath(new URL('../public', import.meta.url));
 const FLUSH_MS = 200;
@@ -225,6 +226,29 @@ export function createApp({ dbFile = ':memory:', publicUrl = '', trustProxy = fa
     }
     res.set('Cache-Control', 'no-store');
     res.json(store.reportData(ev));
+  });
+
+  // The same report as a PDF file to download (no print dialog).
+  app.get('/api/events/:code/report.pdf', (req, res) => {
+    if (limits.miss.blocked(req.ip)) return res.status(429).json({ error: 'Prea multe încercări.' });
+    const ev = adminOf(req);
+    if (!ev) {
+      limits.miss.take(req.ip);
+      return res.status(403).json({ error: 'Acces interzis.' });
+    }
+    const data = store.reportData(ev);
+    const images = { logo: ev.settings.brand?.logo ? store.getLogo(ev.code) : null, polls: {} };
+    for (const p of data.polls) if (p.image) images.polls[p.id] = store.getPollImage(ev.code, p.id);
+    const host = (publicUrl || `${req.protocol}://${req.get('host')}`).replace(/^https?:\/\//, '');
+    try {
+      const doc = reportPdf(data, { lang: pickLang(req.query.lang || req.get('x-lang')), host, images });
+      res.set('Content-Type', 'application/pdf');
+      res.set('Cache-Control', 'no-store');
+      res.set('Content-Disposition', `attachment; filename="raport-${ev.code}.pdf"`);
+      doc.pipe(res);
+    } catch (e) {
+      sendError(res, e);
+    }
   });
 
   app.get('/api/events/:code/export.csv', (req, res) => {

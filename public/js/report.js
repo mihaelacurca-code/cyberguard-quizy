@@ -8,6 +8,28 @@ const code = codeFromPath();
 const key = storage('quizy:events', []).find((e) => e.code === code)?.key;
 $('#back').href = `/admin/${code}`;
 $('#print').addEventListener('click', () => window.print());
+// The PDF is made on the server: one click, the file downloads (no print dialog).
+$('#download').addEventListener('click', async (e) => {
+  const btn = e.currentTarget;
+  btn.disabled = true;
+  const label = btn.textContent;
+  btn.textContent = t('Se pregătește PDF-ul…');
+  try {
+    const res = await fetch(`/api/events/${encodeURIComponent(code)}/report.pdf?lang=${lang}`, { headers: key ? { 'X-Admin-Key': key, 'X-Lang': lang } : { 'X-Lang': lang } });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || t('Nu am putut genera PDF-ul.'));
+    const url = URL.createObjectURL(await res.blob());
+    const a = h('a', { href: url, download: `${t('raport')}-${code}.pdf` });
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  } catch (err) {
+    alert(err.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = label;
+  }
+});
 
 const doc = $('#doc');
 const fmtDate = (ms, withTime = false) => new Date(ms).toLocaleString(lang === 'ro' ? 'ro-RO' : 'en-GB',

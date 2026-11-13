@@ -310,3 +310,27 @@ test('organizer accounts: each organizer sees and opens only their own events', 
     await server.close();
   }
 });
+
+test('the report downloads as a PDF file, only for whoever runs the event', async () => {
+  const { createApp } = await import('../server/app.js');
+  const server = createApp();
+  await new Promise((r) => server.http.listen(0, r));
+  const base = `http://localhost:${server.http.address().port}`;
+  try {
+    const { code, adminKey } = server.store.createEvent('Raport PDF – Primăria Brașov');
+    const ev = server.store.getEvent(code);
+    const [id] = server.store.createPolls(ev, [{ type: 'choice', question: 'Cine ești?', options: ['Funcționar', 'Șef de serviciu'] }]);
+    server.store.setPollStatus(ev, id, 'live');
+    server.store.vote(code, id, A, 'Ștefan', [1]);
+    assert.equal((await fetch(`${base}/api/events/${code}/report.pdf`)).status, 403);
+    const res = await fetch(`${base}/api/events/${code}/report.pdf?lang=ro`, { headers: { 'X-Admin-Key': adminKey } });
+    assert.equal(res.status, 200);
+    assert.equal(res.headers.get('content-type'), 'application/pdf');
+    assert.match(res.headers.get('content-disposition'), /attachment; filename="raport-/);
+    const pdf = Buffer.from(await res.arrayBuffer());
+    assert.equal(pdf.subarray(0, 5).toString(), '%PDF-');
+    assert.ok(pdf.length > 5000);
+  } finally {
+    await server.close();
+  }
+});
